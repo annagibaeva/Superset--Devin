@@ -1,0 +1,100 @@
+name: "UPSTREAM_SYNC_TOKEN Expiry Check"
+
+# Proactively warns before the UPSTREAM_SYNC_TOKEN PAT (used by
+# sync-upstream.yml) expires, so the daily upstream sync never silently
+# stops working.
+#
+# How it alerts: GitHub Issues are disabled on this fork, so this job
+# surfaces problems two ways instead --
+#   1. It writes a job summary and an ::error:: annotation and FAILS the
+#      run, which turns the Actions entry red and triggers GitHub's
+#      built-in "scheduled workflow failed" email to the repo owner.
+#   2. If an optional SLACK_WEBHOOK_URL secret is configured, it also
+#      posts a message there for guaranteed delivery.
+#
+# It reads the token's real expiry from the
+# `github-authentication-token-expiration` response header that GitHub
+# returns on any API call authenticated with a PAT, so the warning is
+# based on the actual expiration date rather than a hard-coded reminder.
+
+on:
+  schedule:
+    # Weekly, Mondays at 06:30 UTC (just after the daily sync window)
+    - cron: "30 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# How many days before expiry to start alerting.
+env:
+  THRESHOLD_DAYS: "14"
+
+jobs:
+  check-token-expiry:
+    name: Warn before UPSTREAM_SYNC_TOKEN expires
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check token expiry and alert
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+
+          alert() {
+            local msg="$1"
+            echo "::error::$msg"
+            {
+              echo "## :warning: UPSTREAM_SYNC_TOKEN alert"
+              echo ""
+              echo "$msg"
+              echo ""
+              echo "Rotate the PAT and update the \`UPSTREAM_SYNC_TOKEN\` repo secret."
+              echo "Required scope: Contents read/write + Workflows read/write"
+              echo "(classic equivalent: \`repo\` + \`workflow\`)."
+            } >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+              payload=$(jq -n --arg t ":warning: [$REPO] $msg" '{text: $t}')
+              curl -fsS -X POST -H 'Content-type: application/json' \
+                --data "$payload" "$SLACK_WEBHOOK_URL" \
+                || echo "::warning::Slack notification failed to send."
+            fi
+          }
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            alert "Secret UPSTREAM_SYNC_TOKEN is not set, so the daily upstream sync cannot run."
+            exit 1
+          fi
+
+          # Any PAT-authenticated response carries the expiration header.
+          if ! headers=$(gh api -i -H "Accept: application/vnd.github+json" /rate_limit 2>&1); then
+            alert "UPSTREAM_SYNC_TOKEN failed to authenticate (it may be expired or revoked):
+          ${headers}"
+            exit 1
+          fi
+
+          exp=$(printf '%s\n' "$headers" | tr -d '\r' \
+            | sed -n 's/^[Gg]ithub-[Aa]uthentication-[Tt]oken-[Ee]xpiration:[[:space:]]*//p')
+
+          if [ -z "$exp" ]; then
+            echo "::notice::UPSTREAM_SYNC_TOKEN has no expiration date set (or the header was not returned); nothing to warn about."
+            echo "UPSTREAM_SYNC_TOKEN reports no expiration date — proactive expiry check not applicable." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          exp_epoch=$(date -u -d "$exp" +%s)
+          now_epoch=$(date -u +%s)
+          days=$(( (exp_epoch - now_epoch) / 86400 ))
+          echo "UPSTREAM_SYNC_TOKEN expires on ${exp} (${days} day(s) remaining)."
+
+          if [ "$days" -le 0 ]; then
+            alert "UPSTREAM_SYNC_TOKEN has EXPIRED (expiry: ${exp}). The daily upstream sync is broken until it is rotated."
+            exit 1
+          elif [ "$days" -le "${THRESHOLD_DAYS}" ]; then
+            alert "UPSTREAM_SYNC_TOKEN expires in ${days} day(s) on ${exp}. Rotate it before then to keep the daily upstream sync running."
+            exit 1
+          fi
+
+          echo "Token healthy: ${days} day(s) until expiry (threshold ${THRESHOLD_DAYS})." >> "$GITHUB_STEP_SUMMARY"

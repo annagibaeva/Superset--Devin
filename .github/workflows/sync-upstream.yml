@@ -61,3 +61,29 @@ jobs:
           fi
           echo "$response"
           echo "Sync complete."
+
+      - name: Notify on failure
+        # Runs only when the sync step fails (e.g. UPSTREAM_SYNC_TOKEN expired
+        # or revoked). The failed run is already red and triggers GitHub's
+        # built-in scheduled-failure email; this adds a Slack ping when the
+        # optional SLACK_WEBHOOK_URL secret is configured (no-op otherwise).
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+          msg="Upstream fork sync FAILED for ${REPO}. Check UPSTREAM_SYNC_TOKEN (expired/revoked?) or branch divergence. Run: ${RUN_URL}"
+          echo "::error::${msg}"
+          {
+            echo "## :rotating_light: Upstream sync failed"
+            echo ""
+            echo "${msg}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            payload=$(jq -n --arg t ":rotating_light: ${msg}" '{text: $t}')
+            curl -fsS -X POST -H 'Content-type: application/json' \
+              --data "$payload" "$SLACK_WEBHOOK_URL" \
+              || echo "::warning::Slack notification failed to send."
+          fi
