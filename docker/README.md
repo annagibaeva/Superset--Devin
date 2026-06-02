@@ -36,7 +36,7 @@ intended for use with local development.
 
 #### Environment Variables
 
-To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file will be loaded after `.env` and can override any settings.
+To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file is loaded after `docker/.env` and can override any settings.
 
 #### Python Configuration
 
