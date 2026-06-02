@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 # Never run two syncs at once; don't cancel an in-flight sync
 concurrency:
@@ -61,3 +62,31 @@ jobs:
           fi
           echo "$response"
           echo "Sync complete."
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --repo "${{ github.repository }}" \
+            --title "⚠️ Upstream sync failed ($(date -u '+%Y-%m-%d'))" \
+            --label "bug" \
+            --body "$(cat <<'EOF'
+            ## Upstream sync failed
+
+            **Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            **Triggered by:** ${{ github.event_name }}
+            **Time:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+            ### Likely causes
+            - `UPSTREAM_SYNC_TOKEN` expired or was revoked
+            - `master` has diverged from upstream and cannot be fast-forwarded
+            - Upstream Apache Superset repo is unreachable
+
+            ### Action required
+            1. Check the [run log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for the exact error
+            2. If the token expired: regenerate the PAT with `repo` + `workflow` scopes and update the `UPSTREAM_SYNC_TOKEN` secret
+            3. If master diverged: manually resolve conflicts before re-running the sync
+            EOF
+            )"
