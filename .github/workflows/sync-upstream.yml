@@ -1,0 +1,47 @@
+name: Sync Fork with Upstream
+
+# Keeps this fork's `master` in sync with apache/superset so upstream
+# security patches, dependency bumps and fixes flow in automatically.
+#
+# It uses GitHub's built-in fork-sync API (the same action as the
+# "Sync fork" button), which fast-forwards `master` to the upstream
+# default branch. This is safe here because the fork carries no custom
+# commits on master; if the branch ever diverges, the API returns a
+# conflict and the run fails loudly instead of forcing anything.
+
+on:
+  schedule:
+    # Daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  # Allow manual runs from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Never run two syncs at once; don't cancel an in-flight sync
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fast-forward master from apache/superset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync master via fork-sync API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Syncing ${{ github.repository }}:master from upstream (apache/superset)..."
+          if ! response=$(gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${{ github.repository }}/merge-upstream" \
+            -f branch=master 2>&1); then
+            echo "::error::Fork sync failed (master may have diverged or the token lacks write access)."
+            echo "$response"
+            exit 1
+          fi
+          echo "$response"
+          echo "Sync complete."
