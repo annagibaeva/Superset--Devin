@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 # Never run two syncs at once; don't cancel an in-flight sync
 concurrency:
@@ -64,13 +65,16 @@ jobs:
 
       - name: Notify on failure
         # Runs only when the sync step fails (e.g. UPSTREAM_SYNC_TOKEN expired
-        # or revoked). The failed run is already red and triggers GitHub's
-        # built-in scheduled-failure email; this adds a Slack ping when the
-        # optional SLACK_WEBHOOK_URL secret is configured (no-op otherwise).
+        # or revoked). Files/updates a tracked issue (deduped by label, via the
+        # default GITHUB_TOKEN), writes a job summary, and posts to Slack when
+        # the optional SLACK_WEBHOOK_URL is set. The run is already red either
+        # way, which also triggers GitHub's scheduled-failure email.
         if: failure()
         env:
+          GH_ISSUE_TOKEN: ${{ github.token }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
+          ISSUE_LABEL: upstream-sync-token
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -uo pipefail
@@ -81,6 +85,29 @@ jobs:
             echo ""
             echo "${msg}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # File or update a single tracked issue (deduped by label). Uses the
+          # default GITHUB_TOKEN; degrades to a warning if Issues are disabled.
+          GH_TOKEN="$GH_ISSUE_TOKEN" gh label create "$ISSUE_LABEL" \
+            --repo "$REPO" --color FBCA04 \
+            --description "Health alerts for the UPSTREAM_SYNC_TOKEN PAT" \
+            >/dev/null 2>&1 || true
+          existing=$(GH_TOKEN="$GH_ISSUE_TOKEN" gh issue list \
+            --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            GH_TOKEN="$GH_ISSUE_TOKEN" gh issue comment "$existing" \
+              --repo "$REPO" --body "$msg" \
+              && echo "Updated tracking issue #$existing." \
+              || echo "::warning::Could not comment on issue #$existing (are Issues enabled?)."
+          else
+            GH_TOKEN="$GH_ISSUE_TOKEN" gh issue create \
+              --repo "$REPO" --title ":rotating_light: Upstream fork sync failed" \
+              --label "$ISSUE_LABEL" --body "$msg" \
+              && echo "Filed a new tracking issue." \
+              || echo "::warning::Could not create an issue (are Issues enabled on $REPO?)."
+          fi
+
           if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
             payload=$(jq -n --arg t ":rotating_light: ${msg}" '{text: $t}')
             curl -fsS -X POST -H 'Content-type: application/json' \

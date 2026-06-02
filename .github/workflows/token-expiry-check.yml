@@ -4,13 +4,19 @@ name: "UPSTREAM_SYNC_TOKEN Expiry Check"
 # sync-upstream.yml) expires, so the daily upstream sync never silently
 # stops working.
 #
-# How it alerts: GitHub Issues are disabled on this fork, so this job
-# surfaces problems two ways instead --
-#   1. It writes a job summary and an ::error:: annotation and FAILS the
-#      run, which turns the Actions entry red and triggers GitHub's
-#      built-in "scheduled workflow failed" email to the repo owner.
-#   2. If an optional SLACK_WEBHOOK_URL secret is configured, it also
-#      posts a message there for guaranteed delivery.
+# How it alerts (in order):
+#   1. Files (or updates) a single tracked GitHub issue, deduped by the
+#      `upstream-sync-token` label so it comments on the open issue rather
+#      than opening a new one each run. Requires Issues to be enabled.
+#   2. Writes a job summary and an ::error:: annotation and FAILS the run,
+#      which turns the Actions entry red and triggers GitHub's built-in
+#      "scheduled workflow failed" email. This is the fallback if Issues
+#      are disabled or issue creation fails.
+#   3. If an optional SLACK_WEBHOOK_URL secret is configured, it also posts
+#      a message there.
+#
+# Issue creation uses the default GITHUB_TOKEN (issues: write); a
+# fine-grained PAT scoped to Contents+Workflows cannot write issues.
 #
 # It reads the token's real expiry from the
 # `github-authentication-token-expiration` response header that GitHub
@@ -25,6 +31,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 # How many days before expiry to start alerting.
 env:
@@ -38,23 +45,55 @@ jobs:
       - name: Check token expiry and alert
         env:
           GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+          GH_ISSUE_TOKEN: ${{ github.token }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           REPO: ${{ github.repository }}
+          ISSUE_LABEL: upstream-sync-token
         run: |
           set -uo pipefail
+
+          # File or update a single tracked issue (deduped by label). Uses the
+          # default GITHUB_TOKEN, not the PAT, since a fine-grained PAT scoped
+          # to Contents+Workflows cannot write issues. Degrades to a warning
+          # if Issues are disabled.
+          file_issue() {
+            local title="$1" body="$2"
+            GH_TOKEN="$GH_ISSUE_TOKEN" gh label create "$ISSUE_LABEL" \
+              --repo "$REPO" --color FBCA04 \
+              --description "Health alerts for the UPSTREAM_SYNC_TOKEN PAT" \
+              >/dev/null 2>&1 || true
+            local existing
+            existing=$(GH_TOKEN="$GH_ISSUE_TOKEN" gh issue list \
+              --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+              --json number --jq '.[0].number // empty' 2>/dev/null || true)
+            if [ -n "$existing" ]; then
+              GH_TOKEN="$GH_ISSUE_TOKEN" gh issue comment "$existing" \
+                --repo "$REPO" --body "$body" \
+                && echo "Updated tracking issue #$existing." \
+                || echo "::warning::Could not comment on issue #$existing (are Issues enabled?)."
+            else
+              GH_TOKEN="$GH_ISSUE_TOKEN" gh issue create \
+                --repo "$REPO" --title "$title" --label "$ISSUE_LABEL" --body "$body" \
+                && echo "Filed a new tracking issue." \
+                || echo "::warning::Could not create an issue (are Issues enabled on $REPO?)."
+            fi
+          }
 
           alert() {
             local msg="$1"
             echo "::error::$msg"
+            local body
+            body=$(printf '%s\n\n%s\n%s\n%s\n' \
+              "$msg" \
+              "Rotate the PAT and update the \`UPSTREAM_SYNC_TOKEN\` repo secret." \
+              "Required scope: Contents read/write + Workflows read/write" \
+              "(classic equivalent: \`repo\` + \`workflow\`).")
             {
               echo "## :warning: UPSTREAM_SYNC_TOKEN alert"
               echo ""
-              echo "$msg"
-              echo ""
-              echo "Rotate the PAT and update the \`UPSTREAM_SYNC_TOKEN\` repo secret."
-              echo "Required scope: Contents read/write + Workflows read/write"
-              echo "(classic equivalent: \`repo\` + \`workflow\`)."
+              echo "$body"
             } >> "$GITHUB_STEP_SUMMARY"
+            file_issue ":warning: UPSTREAM_SYNC_TOKEN needs attention" "$body"
             if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
               payload=$(jq -n --arg t ":warning: [$REPO] $msg" '{text: $t}')
               curl -fsS -X POST -H 'Content-type: application/json' \
