@@ -69,11 +69,16 @@ jobs:
           fi
 
           # Any PAT-authenticated response carries the expiration header.
-          if ! headers=$(gh api -i -H "Accept: application/vnd.github+json" /rate_limit 2>&1); then
+          # Keep stderr in its own file so gh warnings can't pollute the header
+          # parse on the success path, while still surfacing them on failure.
+          err_file="$(mktemp)"
+          if ! headers=$(gh api -i -H "Accept: application/vnd.github+json" /rate_limit 2>"$err_file"); then
             alert "UPSTREAM_SYNC_TOKEN failed to authenticate (it may be expired or revoked):
-          ${headers}"
+          $(cat "$err_file")"
+            rm -f "$err_file"
             exit 1
           fi
+          rm -f "$err_file"
 
           exp=$(printf '%s\n' "$headers" | tr -d '\r' \
             | sed -n 's/^[Gg]ithub-[Aa]uthentication-[Tt]oken-[Ee]xpiration:[[:space:]]*//p')
