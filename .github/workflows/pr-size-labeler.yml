@@ -1,0 +1,51 @@
+name: "PR Size Labeler"
+
+# Auto-labels pull requests by size (size/xs … size/xl) so oversized,
+# hard-to-review PRs are visible at a glance. Generated/vendored files
+# (lockfiles, translation catalogs) are excluded from the size count so
+# they don't inflate the label. Warn-only: it never blocks a merge.
+
+on:
+  # zizmor: ignore[dangerous-triggers] - only reads PR metadata to apply a size label; never checks out or executes PR-provided code
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+
+jobs:
+  label-pr-size:
+    name: Label the PR size
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Label PR by size
+        uses: codelytv/pr-size-labeler@095a41fca88b8764fd9e008ad269bcdb82bb38b9 # v1.10.4
+        with:
+          xs_label: 'size/xs'
+          xs_max_size: '10'
+          s_label: 'size/s'
+          s_max_size: '100'
+          m_label: 'size/m'
+          m_max_size: '500'
+          l_label: 'size/l'
+          l_max_size: '1000'
+          xl_label: 'size/xl'
+          fail_if_xl: 'false'
+          message_if_xl: >
+            This PR is larger than ~1000 lines of reviewable change. Large PRs
+            are hard to review incrementally — please confirm it isn't bundling
+            multiple unrelated changes, and split it if it is.
+          # Generated / vendored files are excluded so they don't inflate the size.
+          files_to_ignore: |
+            "*.lock"
+            "**/package-lock.json"
+            "**/yarn.lock"
+            "superset/translations/**/*.po"
+            "superset/translations/**/*.pot"
