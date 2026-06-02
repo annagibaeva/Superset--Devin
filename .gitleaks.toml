@@ -1,0 +1,55 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# gitleaks configuration for the gitleaks pre-commit hook and the
+# "Secret Scan" CI workflow. It uses the upstream default ruleset and adds an
+# allowlist for known non-production placeholders (dev/test env files, docs,
+# and test fixtures). These are documented false positives, not real secrets;
+# production source code remains in scope.
+
+title = "Superset fork gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Non-production placeholders and test/doc fixtures (no real secrets)"
+# Match the allowlist regexes against the whole line, not just the captured secret.
+regexTarget = "line"
+paths = [
+  # Documentation (examples, versioned docs)
+  '''^docs/''',
+  '''^superset/mcp_service/.*\.md$''',
+  # Tests, specs and fixtures (fake credentials by design)
+  '''(^|/)tests?/''',
+  '''(^|/)spec/''',
+  '''.*\.test\.[tj]sx?$''',
+  '''.*fixtures?\.[A-Za-z]+$''',
+  '''(^|/)cypress-base/''',
+  # Local dev / example deployment config (placeholder credentials)
+  '''(^|/)docker/\.env''',
+  '''^helm/superset/''',
+  '''^superset/examples/''',
+  '''(^|/)scripts/databases/''',
+]
+regexes = [
+  # Well-known placeholder values shipped for local dev only
+  '''CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET''',
+  '''TEST_NON_DEV_SECRET''',
+  # Field-name identifiers that the generic-api-key rule mistakes for secrets
+  # (cache keys / form-data keys / permalink keys / results keys in examples)
+  '''(form_data_key|permalink_key|cache_key|resultsKey)''',
+]
