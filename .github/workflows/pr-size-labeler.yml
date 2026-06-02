@@ -44,8 +44,8 @@ jobs:
             multiple unrelated changes, and split it if it is.
           # Generated / vendored files are excluded so they don't inflate the size.
           files_to_ignore: |
-            "*.lock"
-            "**/package-lock.json"
-            "**/yarn.lock"
-            "superset/translations/**/*.po"
-            "superset/translations/**/*.pot"
+            *.lock
+            **/package-lock.json
+            **/yarn.lock
+            superset/translations/**/*.po
+            superset/translations/**/*.pot
