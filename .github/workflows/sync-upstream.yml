@@ -8,6 +8,15 @@ name: Sync Fork with Upstream
 # default branch. This is safe here because the fork carries no custom
 # commits on master; if the branch ever diverges, the API returns a
 # conflict and the run fails loudly instead of forcing anything.
+#
+# IMPORTANT: this uses a Personal Access Token (secret UPSTREAM_SYNC_TOKEN),
+# NOT the default GITHUB_TOKEN. Upstream regularly updates files under
+# .github/workflows/, and the built-in GITHUB_TOKEN is forbidden from
+# creating/updating workflow files (HTTP 422 "without `workflows`
+# permission"). A PAT with the `workflow` scope can perform the sync.
+# Create a fine-grained PAT scoped to this repo with Contents:read/write
+# and Workflows:read/write (or a classic PAT with `repo` + `workflow`),
+# then add it as the repo secret UPSTREAM_SYNC_TOKEN.
 
 on:
   schedule:
@@ -31,9 +40,16 @@ jobs:
     steps:
       - name: Sync master via fork-sync API
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Secret UPSTREAM_SYNC_TOKEN is not set. Create a PAT with the"
+            echo "::error::'workflow' scope (Contents + Workflows read/write) and add it as"
+            echo "::error::the repo secret UPSTREAM_SYNC_TOKEN. The default GITHUB_TOKEN cannot"
+            echo "::error::update .github/workflows files, which upstream syncs require."
+            exit 1
+          fi
           echo "Syncing ${{ github.repository }}:master from upstream (apache/superset)..."
           if ! response=$(gh api --method POST \
             -H "Accept: application/vnd.github+json" \
