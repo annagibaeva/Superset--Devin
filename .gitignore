@@ -35,7 +35,6 @@ cover
 .idea
 .roo
 .mypy_cache
-
 .tox
 .vscode
 _build
