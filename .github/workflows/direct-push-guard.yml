@@ -53,9 +53,8 @@ jobs:
 
           # Check the GitHub Events API to see if this commit is associated
           # with a PushEvent that has a merged PR. The most reliable signal:
-          # query the search API for PRs that merged this exact SHA.
-          pr_number=$(gh api "search/issues?q=repo:${REPO}+is:pr+is:merged+SHA:${SHA}" \
-            --jq '.items[0].number // empty' 2>/dev/null || true)
+          pr_number=$(gh api "repos/${REPO}/commits/${SHA}/pulls" \
+            --jq '[.[] | select(.merged_at != null)][0].number // empty' 2>/dev/null || true)
 
           if [ -n "$pr_number" ]; then
             echo "Push is from merged PR #${pr_number} — OK."
