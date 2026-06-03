@@ -1,0 +1,115 @@
+name: Direct Push Guard
+
+# Detects direct pushes to master (i.e. pushes that did NOT go through a
+# pull request) and alerts the repository owner. This is a defense-in-depth
+# backstop: with branch-protection rulesets active, direct pushes are already
+# blocked by GitHub itself. This workflow catches the edge cases where the
+# ruleset is bypassed, temporarily disabled, or not yet applied.
+#
+# The sync-upstream workflow is explicitly allowlisted — its fast-forward
+# merges are expected direct pushes and are not flagged.
+#
+# Alert channels (same pattern as token-expiry-check.yml):
+#   1. GitHub issue (deduped by label `direct-push-alert`)
+#   2. Red run + error annotation → GitHub's scheduled-failure email
+#   3. Optional Slack via SLACK_WEBHOOK_URL secret
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  check-direct-push:
+    name: Detect direct push to master
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check if push came from a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          ISSUE_LABEL: direct-push-alert
+          PUSHER: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          REF: ${{ github.ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -uo pipefail
+
+          # --- Allowlist: expected automated pushes ---
+          # The sync-upstream workflow pushes directly to master via the
+          # fork-sync API. Its actor is typically the PAT owner or
+          # "github-actions[bot]". We also allowlist merge-queue bots.
+          case "$PUSHER" in
+            *\[bot\]) echo "Push by bot ($PUSHER) — allowlisted."; exit 0 ;;
+          esac
+
+          # Check the GitHub Events API to see if this commit is associated
+          # with a PushEvent that has a merged PR. The most reliable signal:
+          pr_number=$(gh api "repos/${REPO}/commits/${SHA}/pulls" \
+            --jq '[.[] | select(.merged_at != null)][0].number // empty' 2>/dev/null || true)
+
+          if [ -n "$pr_number" ]; then
+            echo "Push is from merged PR #${pr_number} — OK."
+            exit 0
+          fi
+
+          # If the sync-upstream workflow just ran and pushed this SHA, skip.
+          # Check recent workflow runs for sync-upstream that completed
+          # successfully in the last 10 minutes.
+          sync_run=$(gh api "repos/${REPO}/actions/workflows/sync-upstream.yml/runs?per_page=5&status=success" \
+            --jq "[.workflow_runs[] | select(.head_sha == \"${SHA}\")] | length" 2>/dev/null || echo "0")
+
+          if [ "$sync_run" != "0" ] && [ "$sync_run" != "" ]; then
+            echo "Push matches a successful sync-upstream run — allowlisted."
+            exit 0
+          fi
+
+          # --- ALERT: this is a direct push ---
+          msg="Direct push to master detected by @${PUSHER} (${SHA:0:8}). All changes must go through a reviewed pull request. Run: ${RUN_URL}"
+          echo "::error::${msg}"
+          {
+            echo "## :stop_sign: Direct push to master detected"
+            echo ""
+            echo "${msg}"
+            echo ""
+            echo "**Action required:** Revert the direct push and submit changes via a pull request with at least one approving review."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # File or update a single tracked issue (deduped by label)
+          gh label create "$ISSUE_LABEL" \
+            --repo "$REPO" --color D93F0B \
+            --description "Alert: direct push to master without a pull request" \
+            >/dev/null 2>&1 || true
+          existing=$(gh issue list \
+            --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" \
+              --repo "$REPO" --body "$msg" \
+              && echo "Updated tracking issue #$existing." \
+              || echo "::warning::Could not comment on issue #$existing."
+          else
+            gh issue create \
+              --repo "$REPO" --title ":stop_sign: Direct push to master detected" \
+              --label "$ISSUE_LABEL" --body "$msg" \
+              && echo "Filed a new tracking issue." \
+              || echo "::warning::Could not create an issue (are Issues enabled on $REPO?)."
+          fi
+
+          # Optional Slack notification
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            payload=$(jq -n --arg t ":stop_sign: [$REPO] $msg" '{text: $t}')
+            curl -fsS -X POST -H 'Content-type: application/json' \
+              --data "$payload" "$SLACK_WEBHOOK_URL" \
+              || echo "::warning::Slack notification failed to send."
+          fi
+
+          exit 1

@@ -138,6 +138,8 @@ PROJECT.md
 .claude_rc*
 .claude/settings.local.json
 .env.local
+# Local docker override env file
+docker/.env-local
 oxc-custom-build/
 *.code-workspace
 *.duckdb
