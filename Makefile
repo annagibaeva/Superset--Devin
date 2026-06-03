@@ -49,7 +49,7 @@ superset:
 	# Install node packages
 	cd superset-frontend; npm ci
 
-update: update-py update-js
+update: update-py update-js pre-commit
 
 update-py:
 	# Install external dependencies
@@ -63,6 +63,9 @@ update-py:
 
 	# Create default roles and permissions
 	superset init
+
+	# Ensure pre-commit hooks are installed
+	@command -v pre-commit > /dev/null 2>&1 && pre-commit install || true
 
 update-js:
 	# Install js packages
