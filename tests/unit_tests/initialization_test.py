@@ -234,6 +234,19 @@ class TestCheckSecretKey:
         initializer.check_secret_key()
         mock_logger.error.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+    )
+    @patch("superset.initialization.is_test", return_value=False)
+    @patch("superset.initialization.logger")
+    def test_allows_insecure_key_in_testing_mode(
+        self, mock_logger, mock_is_test, secret_key
+    ):
+        """TESTING config also takes the warn-only path."""
+        initializer = self._initializer(secret_key, testing=True)
+        initializer.check_secret_key()
+        mock_logger.error.assert_not_called()
+
     @patch("superset.initialization.is_test", return_value=False)
     @patch("superset.initialization.logger")
     def test_allows_secure_key(self, mock_logger, mock_is_test):
@@ -241,6 +254,7 @@ class TestCheckSecretKey:
         initializer = self._initializer("a-strong-random-secret-value")
         initializer.check_secret_key()
         mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_not_called()
 
 
 class TestCreateAppRoot:
