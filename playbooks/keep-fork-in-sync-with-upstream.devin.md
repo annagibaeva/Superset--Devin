@@ -56,7 +56,7 @@ branch has diverged, rather than forcing anything.
      exit on failure so divergence/permission issues fail the run loudly.
 5. Add a clear header comment in the workflow explaining what it does and the
    fast-forward-only assumption.
-6. Validate the workflow YAML locally (e.g. `python -c "import yaml,sys;
+6. Validate the workflow YAML locally (e.g. `python -c "import yaml;
    yaml.safe_load(open('.github/workflows/sync-upstream.yml'))"` or `actionlint`
    if available).
 7. Commit, push the branch, and open a PR. Wait for CI to pass.
