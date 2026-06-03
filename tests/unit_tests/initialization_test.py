@@ -233,6 +233,9 @@ class TestCheckSecretKey:
         initializer = self._initializer(secret_key, debug=True)
         initializer.check_secret_key()
         mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_any_call(
+            "Debug mode identified with insecure secret key"
+        )
 
     @pytest.mark.parametrize(
         "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
@@ -246,6 +249,9 @@ class TestCheckSecretKey:
         initializer = self._initializer(secret_key, testing=True)
         initializer.check_secret_key()
         mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_any_call(
+            "Debug mode identified with insecure secret key"
+        )
 
     @patch("superset.initialization.is_test", return_value=False)
     @patch("superset.initialization.logger")
