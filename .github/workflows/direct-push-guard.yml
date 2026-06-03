@@ -26,21 +26,7 @@ permissions:
 jobs:
   check-direct-push:
     name: Detect direct push to master
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check if push came from a pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          REPO: ${{ github.repository }}
-          ISSUE_LABEL: direct-push-alert
-          PUSHER: ${{ github.actor }}
-          SHA: ${{ github.sha }}
-          REF: ${{ github.ref }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -uo pipefail
+    runs-on: ubuntu-24.04
 
           # --- Allowlist: expected automated pushes ---
           # The sync-upstream workflow pushes directly to master via the
