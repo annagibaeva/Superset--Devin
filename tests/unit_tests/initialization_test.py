@@ -18,9 +18,11 @@
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
 from sqlalchemy.exc import OperationalError
 
 from superset.app import AppRootMiddleware, create_app, SupersetApp
+from superset.constants import CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY
 from superset.initialization import SupersetAppInitializer
 
 
@@ -188,6 +190,77 @@ class TestSupersetAppInitializer:
             app_initializer._db_uri_cache
             == "postgresql://realuser:realpass@realhost:5432/realdb"
         )
+
+
+class TestCheckSecretKey:
+    """check_secret_key refuses to boot with publicly-known SECRET_KEY values."""
+
+    @staticmethod
+    def _initializer(
+        secret_key: str, *, debug: bool = False, testing: bool = False
+    ) -> SupersetAppInitializer:
+        mock_app = MagicMock()
+        mock_app.debug = debug
+        mock_app.config = {"SECRET_KEY": secret_key, "TESTING": testing}
+        return SupersetAppInitializer(mock_app)
+
+    @pytest.mark.parametrize(
+        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+    )
+    @patch("superset.initialization.is_test", return_value=False)
+    @patch("superset.initialization.logger")
+    def test_refuses_to_start_with_insecure_key(
+        self, mock_logger, mock_is_test, secret_key
+    ):
+        """Outside debug/test, a known-insecure key aborts startup."""
+        initializer = self._initializer(secret_key)
+        with pytest.raises(SystemExit) as exc_info:
+            initializer.check_secret_key()
+        assert exc_info.value.code == 1
+        mock_logger.error.assert_called_once_with(
+            "Refusing to start due to insecure SECRET_KEY"
+        )
+
+    @pytest.mark.parametrize(
+        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+    )
+    @patch("superset.initialization.is_test", return_value=False)
+    @patch("superset.initialization.logger")
+    def test_allows_insecure_key_in_debug_mode(
+        self, mock_logger, mock_is_test, secret_key
+    ):
+        """Debug mode only warns; it must not abort startup."""
+        initializer = self._initializer(secret_key, debug=True)
+        initializer.check_secret_key()
+        mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_any_call(
+            "Debug mode identified with insecure secret key"
+        )
+
+    @pytest.mark.parametrize(
+        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+    )
+    @patch("superset.initialization.is_test", return_value=False)
+    @patch("superset.initialization.logger")
+    def test_allows_insecure_key_in_testing_mode(
+        self, mock_logger, mock_is_test, secret_key
+    ):
+        """TESTING config also takes the warn-only path."""
+        initializer = self._initializer(secret_key, testing=True)
+        initializer.check_secret_key()
+        mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_any_call(
+            "Debug mode identified with insecure secret key"
+        )
+
+    @patch("superset.initialization.is_test", return_value=False)
+    @patch("superset.initialization.logger")
+    def test_allows_secure_key(self, mock_logger, mock_is_test):
+        """A strong, non-default key boots without warning or abort."""
+        initializer = self._initializer("a-strong-random-secret-value")
+        initializer.check_secret_key()
+        mock_logger.error.assert_not_called()
+        mock_logger.warning.assert_not_called()
 
 
 class TestCreateAppRoot:
