@@ -36,3 +36,16 @@ The Developer Portal includes comprehensive guides for:
 - [Development How-tos](https://superset.apache.org/developer_portal/contributing/howtos)
 
 Source for the Developer Portal documentation is [located here](https://github.com/apache/superset/tree/master/docs/developer_portal).
+
+## Python Version Policy
+
+| Slot | Python version | Where it's used |
+|------|---------------|-----------------|
+| **current** (production) | 3.11 | Docker image (`PY_VER`), CI "current" matrix entry |
+| previous | 3.10 | CI matrix — must stay supported (`requires-python = ">=3.10"`) |
+| next | 3.12 | CI matrix — forward-compatibility testing |
+
+**Developers should use Python 3.11 locally** to match the production target.
+The repo-root `.python-version` file signals this to version managers
+(pyenv, mise, asdf, etc.) so the correct interpreter is selected
+automatically.

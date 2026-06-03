@@ -2,6 +2,7 @@
 .gitignore
 .gitattributes
 .gitkeep
+.python-version
 .coverage
 .coveragerc
 .codecov.yml
