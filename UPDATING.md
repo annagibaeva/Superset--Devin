@@ -39,13 +39,17 @@ Set a unique non-empty key in gitignored `docker/.env-local` first (see the Dock
 Set `dc`, `svc`, and `db` for the stack, then run the block. A failed `docker compose config` stops here and does not tell you to replace a key you already have.
 
 ```bash
+# Stack started with `make up` (project name and ports from scripts/docker-compose-up.sh).
+# Run this in the same shell before the assignments below. Plain `docker compose`
+# can pick a different project, and then `stop` misses the running containers.
+# eval "$(./scripts/docker-compose-up.sh --env | grep '^export ')"
 # Default stack:
 dc="docker compose"; svc=superset; db="db redis"
-# Light stack (no Redis; app service is superset-light):
+# Light stack (no Redis; app service is superset-light; volume db_home_light):
 # dc="docker compose -f docker-compose-light.yml"; svc=superset-light; db=db-light
-# Non-dev stack:
+# Non-dev stack (same db_home volume as the default stack):
 # dc="docker compose -f docker-compose-non-dev.yml"; svc=superset; db="db redis"
-# Image-tag stack (published image; see the note below):
+# Image-tag stack (published image; same db_home volume; see the note below):
 # dc="docker compose -f docker-compose-image-tag.yml"; svc=superset; db="db redis"
 
 config=$($dc config --format json "$svc") || {
@@ -81,6 +85,8 @@ $dc up -d
 ```
 
 That single hop still rolls back, without changing anything, if a row is also under `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Set the new key and re-encrypt before the next `docker compose up` so new rows are not written under a third key. Otherwise discard local metadata with `docker compose down -v`.
+
+The default, non-dev, and image-tag stacks share the `db_home` volume, so one run covers them. The light stack uses `db_home_light`. If you also used the light stack, run the block again with the light values. A stack started with `make up` uses that script's project name and ports. Export them first, as in the block, or `stop` and the database `up` target a different volume from the one `make up` is using.
 
 `docker-compose-non-dev.yml` builds from this checkout. Set `dc`, `svc`, and `db` to the non-dev values in the block above.
 
