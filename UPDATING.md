@@ -28,7 +28,9 @@ assists people when migrating to a new version.
 
 `docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known and is rejected outside debug/test mode.
 
-Existing Docker Compose metadata databases were encrypted with that key. The key changes as soon as containers are recreated, including when `docker/.env-local` does not exist: an unset `SUPERSET_SECRET_KEY` falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Saved database passwords, `encrypted_extra`, certificates, and OAuth tokens then fail to decrypt, and `superset-init` can fail while reading the examples database.
+Skip the re-encryption below if `docker/.env-local` already set a unique `SUPERSET_SECRET_KEY` before this upgrade. Compose still loads that key, and the metadata is already encrypted with it.
+
+Metadata encrypted with the tracked `TEST_NON_DEV_SECRET` changes as soon as containers are recreated, including when `docker/.env-local` does not exist: an unset `SUPERSET_SECRET_KEY` falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Saved database passwords, `encrypted_extra`, certificates, and OAuth tokens then fail to decrypt, and `superset-init` can fail while reading the examples database.
 
 Set a unique non-empty key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`). `superset-init` runs `superset init` and `superset load_examples` with `set -e`, and the `superset` service waits for that init to succeed, so a decrypt error leaves no app container to `docker compose exec` into. Re-encrypt from a one-off container that skips that dependency.
 
@@ -60,7 +62,7 @@ docker compose -f docker-compose-light.yml run --rm --no-deps superset-light \
 docker compose -f docker-compose-light.yml up -d
 ```
 
-The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. Fix the cause and rerun the block, or discard local metadata with `docker compose down -v`.
+The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. Otherwise fix the cause and rerun the block, or discard local metadata with `docker compose down -v`.
 
 Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names.
 
