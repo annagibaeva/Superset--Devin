@@ -42,7 +42,6 @@ paths = [
   # Tracked local-dev placeholders only. docker/.env-local holds the real key
   # and stays in scope for the scanner.
   '''^docker/\.env$''',
-  '''^docker/\.env-local\.example$''',
   '''^helm/superset/''',
   '''^superset/examples/''',
   '''(^|/)scripts/databases/''',

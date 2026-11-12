@@ -235,17 +235,17 @@ non-zero. A new or existing `docker/.env-local` is kept mode `600`. If
 )
 ```
 
+Do not commit `docker/.env-local` or the generated value. Every Compose file loads
+`FLASK_DEBUG=true` from `docker/.env`, so a missing key does not stop the stack: Superset
+logs a warning and falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`.
+Run the snippet above before the first `docker compose up`. If you already have a Docker
+Compose metadata database, re-encrypt it after setting the new key and before the next
+`docker compose up`. The steps are under
+[Re-encrypting an existing metadata volume](#re-encrypting-an-existing-metadata-volume).
+
 Do not copy `docker/.env-local.example` over `docker/.env-local`. That removes
 the key, and its port values break in-container database and Redis connections.
 Use `make up` for extra instances.
-
-Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true`
-from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and
-falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Run the snippet
-above before the first `docker compose up`. If you already have a Docker Compose metadata
-database, re-encrypt it after setting the new key and before the next
-`docker compose up`. The steps are under
-[Re-encrypting an existing metadata volume](#re-encrypting-an-existing-metadata-volume).
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`
 container will populate example data and visualizations into the metadata database. These examples
@@ -396,6 +396,18 @@ dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
 unset config resolved
 ```
 
+The `not-a-real-key` run matches nothing. On this checkout it prints
+`Re-encryption complete: 0 re-encrypted, N skipped, N null, 0 failed.`
+When you have saved connections, SSH tunnels, OAuth tokens, or semantic layer
+configuration, confirm `N skipped` is greater than zero, then run `dc up -d`.
+A failure means some encrypted value is still unreadable. Do not start the
+stack. A published image prints no such summary and exits 0 without moving
+values. Do not use it for this step. A missing-table error means `superset db
+upgrade` did not run.
+
+If a step fails, run the commands below in the same shell as the main block.
+They use its `dc`, `svc`, and `db_up` definitions.
+
 If the check step (`python -c ... create_app()`) fails, no rows have changed
 and the app containers were not stopped. The block starts `db` and `redis`
 (or `db-light`) before that check, because creating the app reads the metadata
@@ -416,7 +428,7 @@ dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
   superset re-encrypt-secrets --previous_secret_key not-a-real-key
 ```
 
-If that check succeeds, confirm `N skipped` as described below, then run
+If that check succeeds, confirm `N skipped` as described above, then run
 `dc up -d`. If it also reports failures, the volume uses a key you no longer
 have. Restore that key in `docker/.env-local` instead of starting the stack. If only
 some values failed, those rows are already under the new key. Move the
@@ -433,19 +445,6 @@ dc run --rm --no-deps -e FLASK_DEBUG=false \
 dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
   superset re-encrypt-secrets --previous_secret_key not-a-real-key
 ```
-
-The last command in each block runs `re-encrypt-secrets` with a previous key
-that matches nothing. On this checkout that prints
-`Re-encryption complete: 0 re-encrypted, N skipped, N null, 0 failed.`
-When you have saved connections, SSH tunnels, OAuth tokens, or semantic layer
-configuration, confirm `N skipped` is greater than zero, then run `dc up -d`.
-A failure means some encrypted value is still unreadable. Do not start the
-stack. A published image prints no such summary and exits 0 without moving
-values. Do not use it for this step. A missing-table error means `superset db
-upgrade` did not run.
-
-Run the recovery blocks in the same shell as the main block. They use its
-`dc`, `svc`, and `db_up` definitions.
 
 ## 3. Log in to Superset
 
