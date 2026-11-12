@@ -22,7 +22,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from superset.app import AppRootMiddleware, create_app, SupersetApp
-from superset.constants import CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY
+from superset.constants import CHANGE_ME_SECRET_KEY, LEGACY_DOCKER_SECRET_KEY
 from superset.initialization import SupersetAppInitializer
 
 
@@ -205,7 +205,7 @@ class TestCheckSecretKey:
         return SupersetAppInitializer(mock_app)
 
     @pytest.mark.parametrize(
-        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+        "secret_key", [CHANGE_ME_SECRET_KEY, LEGACY_DOCKER_SECRET_KEY]
     )
     @patch("superset.initialization.is_test", return_value=False)
     @patch("superset.initialization.logger")
@@ -222,7 +222,7 @@ class TestCheckSecretKey:
         )
 
     @pytest.mark.parametrize(
-        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+        "secret_key", [CHANGE_ME_SECRET_KEY, LEGACY_DOCKER_SECRET_KEY]
     )
     @patch("superset.initialization.is_test", return_value=False)
     @patch("superset.initialization.logger")
@@ -238,7 +238,7 @@ class TestCheckSecretKey:
         )
 
     @pytest.mark.parametrize(
-        "secret_key", [CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY]
+        "secret_key", [CHANGE_ME_SECRET_KEY, LEGACY_DOCKER_SECRET_KEY]
     )
     @patch("superset.initialization.is_test", return_value=False)
     @patch("superset.initialization.logger")

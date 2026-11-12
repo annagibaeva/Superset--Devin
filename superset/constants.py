@@ -29,12 +29,12 @@ EMPTY_STRING = "<empty string>"
 
 CHANGE_ME_SECRET_KEY = "CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET"  # noqa: S105
 CHANGE_ME_GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"  # noqa: S105
-# Publicly known value that was distributed in docker/.env. Reusing it in a
+# Publicly known SECRET_KEY from older docker/.env files. Reusing it in a
 # real deployment is just as unsafe as the documented default above.
-DOCKER_DEV_SECRET_KEY = "TEST_NON_DEV_SECRET"  # noqa: S105
+LEGACY_DOCKER_SECRET_KEY = "TEST_NON_DEV_SECRET"  # noqa: S105
 # SECRET_KEY values that are publicly known and therefore insecure. Superset
 # refuses to start with any of these outside debug/test mode.
-INSECURE_SECRET_KEYS = frozenset({CHANGE_ME_SECRET_KEY, DOCKER_DEV_SECRET_KEY})
+INSECURE_SECRET_KEYS = frozenset({CHANGE_ME_SECRET_KEY, LEGACY_DOCKER_SECRET_KEY})
 
 SKIP_VISIBILITY_FILTER_CLASSES = "_skip_visibility_filter_classes"
 

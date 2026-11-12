@@ -286,8 +286,8 @@ your terminal and/or in your `docker/.env` file.
 
 ### Re-encrypting an existing metadata volume
 
-Skip this section when `docker/.env-local` already had a unique
-`SUPERSET_SECRET_KEY` when the volume was created.
+Skip this section when the volume was created with, or has already been
+re-encrypted to, the key in `docker/.env-local`.
 
 A volume created while the key was `TEST_NON_DEV_SECRET` (the old `docker/.env`)
 or the `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` fallback (no key set) must be
@@ -408,10 +408,20 @@ and run the block again.
 On images built from this repository, a failed hop logs
 `Re-encryption summary: N re-encrypted, N skipped, N null, N failed` and then
 `Re-encryption failed: Re-encryption failed for N value(s); transaction rolled back`.
-The transaction is rolled back. If every value failed, the metadata is
-probably already under the key in `docker/.env-local`. Start the stack with
-`dc up -d`. If only some values failed, those rows are already under the new
-key. Move the remaining `TEST_NON_DEV_SECRET` rows in one hop. That hop still
+The transaction is rolled back. If every value failed, check whether the
+metadata is already under the key in `docker/.env-local`:
+
+```bash
+db_up &&
+dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
+dc up -d
+```
+
+If that check also reports failures, the volume uses a key you no longer have.
+Restore that key in `docker/.env-local` instead of starting the stack. If only
+some values failed, those rows are already under the new key. Move the
+remaining `TEST_NON_DEV_SECRET` rows in one hop. That hop still
 rolls back, without writing, when a row is also under the default key. The
 single-hop command uses the same debug-off start, so a startup-check failure
 stops it before it writes.
