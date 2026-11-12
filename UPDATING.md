@@ -24,6 +24,16 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Docker Compose no longer ships a secret key
+
+`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value is publicly known and is rejected outside debug/test mode. Generate a unique key and put it in the gitignored override file:
+
+```bash
+echo "SUPERSET_SECRET_KEY=$(openssl rand -base64 42)" >> docker/.env-local
+```
+
+Local development with `FLASK_DEBUG=true` still starts without that file: Superset falls back to the default insecure key and logs a warning. A non-debug boot refuses to start until a unique key is set. After you set a new key, existing local sessions and any values encrypted with the old key must be recreated.
+
 ### Dataset import validates catalog against the target connection
 
 Importing a dataset now validates the `catalog` field against the target database connection. When the connection has multi-catalog disabled (`allow_multi_catalog` off) and the dataset's catalog is not the connection's default catalog, the import fails instead of silently persisting the non-default catalog. This matches the validation already enforced on the dataset update path and prevents imported datasets from querying an unintended database.

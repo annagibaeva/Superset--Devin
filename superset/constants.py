@@ -29,9 +29,8 @@ EMPTY_STRING = "<empty string>"
 
 CHANGE_ME_SECRET_KEY = "CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET"  # noqa: S105
 CHANGE_ME_GUEST_TOKEN_JWT_SECRET = "test-guest-secret-change-me"  # noqa: S105
-# Placeholder SECRET_KEY shipped in docker/.env for local development. It is
-# publicly known, so reusing it in a real deployment is just as unsafe as the
-# documented default above.
+# Publicly known value that was distributed in docker/.env. Reusing it in a
+# real deployment is just as unsafe as the documented default above.
 DOCKER_DEV_SECRET_KEY = "TEST_NON_DEV_SECRET"  # noqa: S105
 # SECRET_KEY values that are publicly known and therefore insecure. Superset
 # refuses to start with any of these outside debug/test mode.

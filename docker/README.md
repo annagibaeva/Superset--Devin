@@ -38,6 +38,14 @@ intended for use with local development.
 
 To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file is loaded after `docker/.env` and can override any settings.
 
+`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key and store it only in `docker/.env-local`:
+
+```bash
+echo "SUPERSET_SECRET_KEY=$(openssl rand -base64 42)" >> docker/.env-local
+```
+
+Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to start when the key is missing or set to a known insecure value.
+
 #### Python Configuration
 
 In order to override configuration settings locally, simply make a copy of [`./docker/pythonpath_dev/superset_config_local.example`](./pythonpath_dev/superset_config_local.example)

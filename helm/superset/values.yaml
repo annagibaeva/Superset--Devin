@@ -104,7 +104,7 @@ extraSecretEnv: {}
   # GOOGLE_KEY: ...
   # GOOGLE_SECRET: ...
   #   # Generate your own secret key for encryption. Use openssl rand -base64 42 to generate a good key
-  #  SUPERSET_SECRET_KEY: 'CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET'
+  #  SUPERSET_SECRET_KEY: '<output of openssl rand -base64 42>'
 
 # -- Extra files to be mounted as ConfigMap on the path specified in `extraConfigMountPath`
 extraConfigs: {}
@@ -176,7 +176,7 @@ configOverrides: {}
   #   AUTH_USER_REGISTRATION_ROLE = "Admin"
   # secret: |
   #   # Generate your own secret key for encryption. Use `openssl rand -base64 42` to generate a good key
-  #   SECRET_KEY = 'CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET'
+  #   SECRET_KEY = '<output of openssl rand -base64 42>'
 
 # -- Same as above but the values are files
 configOverridesFiles: {}

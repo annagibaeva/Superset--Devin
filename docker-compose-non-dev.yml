@@ -18,8 +18,9 @@
 # -----------------------------------------------------------------------
 # We don't support docker compose for production environments.
 # If you choose to use this type of deployment make sure to
-# create you own docker environment file (docker/.env) with your own
-# unique random secure passwords and SECRET_KEY.
+# set unique random secure passwords and SUPERSET_SECRET_KEY in
+# docker/.env-local (gitignored). Generate a key with:
+#   openssl rand -base64 42
 #
 # For verbose logging during development:
 # - Set SUPERSET_LOG_LEVEL=debug in docker/.env-local for detailed Superset logs
