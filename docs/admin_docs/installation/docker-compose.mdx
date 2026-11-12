@@ -192,12 +192,17 @@ preventing developers from risking committing potentially sensitive configuratio
 
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
 key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes a
-key when the file has no non-empty `SUPERSET_SECRET_KEY` (an empty `SUPERSET_SECRET_KEY=`
-does not count):
+key unless the last `SUPERSET_SECRET_KEY` in the file is already a non-empty value other
+than the known insecure defaults. Empty assignments, including `''` and `""`, and the
+published values `TEST_NON_DEV_SECRET` and `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` do not
+count:
 
 ```bash
-grep -q '^SUPERSET_SECRET_KEY=.' docker/.env-local 2>/dev/null || \
-  printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local
+current=$(grep '^SUPERSET_SECRET_KEY=' docker/.env-local 2>/dev/null | tail -n 1 | cut -d= -f2- | tr -d "'\"" || true)
+case "$current" in
+  ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
+    printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
+esac
 ```
 
 Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to
