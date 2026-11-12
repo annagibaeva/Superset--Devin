@@ -197,7 +197,8 @@ key with `openssl rand -base64 42` and store it only in `docker/.env-local`. Run
 the repository root. It writes a key only after `docker compose config` succeeds, and only
 when the value Compose resolves for the `superset` service is empty or one of the published
 defaults (`TEST_NON_DEV_SECRET` or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`). A failed config
-leaves the file unchanged:
+leaves the file unchanged and the snippet exits non-zero. A new or existing
+`docker/.env-local` is kept mode `600`:
 
 ```bash
 if config=$(docker compose config --format json superset); then
@@ -205,10 +206,12 @@ if config=$(docker compose config --format json superset); then
     | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1)
   case "$current" in
     ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
-      printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
+      (umask 077 && printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local) ;;
   esac
+  chmod 600 docker/.env-local 2>/dev/null || true
 else
   echo "docker compose config failed; fix the error above, then rerun" >&2
+  false
 fi
 ```
 
@@ -219,7 +222,7 @@ from `docker/.env`, so a missing key does not stop the stack: Superset logs a wa
 falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Run the snippet
 above before the first `docker compose up`. If you already have a Docker Compose metadata
 database, follow the re-encryption steps in
-[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md) after setting the
+[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md#docker-compose-no-longer-ships-a-secret-key) after setting the
 new key and before the next `docker compose up`.
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`

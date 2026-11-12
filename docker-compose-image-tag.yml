@@ -20,7 +20,8 @@
 # If you choose to use this type of deployment make sure to
 # set unique random secure passwords and SUPERSET_SECRET_KEY in
 # docker/.env-local (gitignored). See docker/README.md for how to generate
-# the key; existing metadata volumes must be re-encrypted first (UPDATING.md).
+# the key; existing metadata volumes must be re-encrypted first
+# (UPDATING.md, "Docker Compose no longer ships a secret key").
 #
 # For verbose logging during development:
 # - Set SUPERSET_LOG_LEVEL=debug in docker/.env-local for detailed Superset logs
