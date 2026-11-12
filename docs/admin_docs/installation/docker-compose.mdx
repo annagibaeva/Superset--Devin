@@ -308,9 +308,12 @@ that were created with the old key. It keeps containers and named volumes.
 The first re-encrypt moves `TEST_NON_DEV_SECRET` onto the default key with
 `FLASK_DEBUG=true`. The second moves those rows onto the key in
 `docker/.env-local` with `FLASK_DEBUG=false`, which runs Superset's production
-startup checks. A check step runs those same checks first, before the stack is
-stopped, so a bad setting (for example the default `GUEST_TOKEN_JWT_SECRET`
-with embedding on) stops the block before any rows change.
+startup checks. The block starts only the database services, then runs those
+same checks, and only then stops the app. A bad setting (for example the
+default `GUEST_TOKEN_JWT_SECRET` with embedding on) stops the block before any
+rows change and before the running app is stopped. The database services do
+not read `SUPERSET_SECRET_KEY`. A `Cannot connect to database` error means
+that database start failed, not a Superset setting.
 
 The default, non-dev, and image-tag stacks share the `db_home` volume, so one
 run covers them. The light stack uses `db_home_light`. Light instances started
@@ -375,6 +378,7 @@ case "$resolved" in
     false ;;
 esac &&
 unset resolved &&
+db_up &&
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" python -c 'from superset.app import create_app; create_app()' &&
 dc stop &&
@@ -390,7 +394,10 @@ unset config resolved
 ```
 
 If the check step (`python -c ... create_app()`) fails, no rows have changed
-and the running stack was not stopped. Fix the setting it names, for example
+and the app containers were not stopped. The block starts `db` and `redis`
+(or `db-light`) before that check, because creating the app reads the metadata
+database. A `Cannot connect to database` error means that start failed. Any
+other message names a Superset setting. Fix it, for example set
 `GUEST_TOKEN_JWT_SECRET` in `superset_config_docker.py` when embedding is on,
 and run the block again.
 
