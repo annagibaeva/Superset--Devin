@@ -193,18 +193,23 @@ Also note that `docker/.env-local` is referenced in our `.gitignore`,
 preventing developers from risking committing potentially sensitive configuration to the repository.
 
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
-key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes a
-key unless the value Compose resolves for the `superset` service is already non-empty and
-not one of the published defaults (`TEST_NON_DEV_SECRET` or
-`CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`):
+key with `openssl rand -base64 42` and store it only in `docker/.env-local`. Run this from
+the repository root. It writes a key only after `docker compose config` succeeds, and only
+when the value Compose resolves for the `superset` service is empty or one of the published
+defaults (`TEST_NON_DEV_SECRET` or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`). A failed config
+leaves the file unchanged:
 
 ```bash
-current=$(docker compose config --format json superset 2>/dev/null \
-  | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1)
-case "$current" in
-  ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
-    printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
-esac
+if config=$(docker compose config --format json superset); then
+  current=$(printf '%s\n' "$config" \
+    | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1)
+  case "$current" in
+    ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
+      printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
+  esac
+else
+  echo "docker compose config failed; fix the error above, then rerun" >&2
+fi
 ```
 
 If you use `docker/.env-local.example`, copy it first (`cp -n docker/.env-local.example docker/.env-local`) and then run the snippet. Copying the example over an existing `docker/.env-local` removes the key.
