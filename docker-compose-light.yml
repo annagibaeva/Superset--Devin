@@ -57,7 +57,8 @@
 # - Subsequent runs are fast (~2-3 seconds startup)
 # - Use FORCE_RELOAD=true when you need a clean test database
 # - Tests use SimpleCache instead of Redis (no Redis required)
-# - Set SUPERSET_SECRET_KEY in docker/.env-local (openssl rand -base64 42)
+# - Set SUPERSET_SECRET_KEY in docker/.env-local (see docker/README.md;
+#   re-encrypt existing volumes first, see UPDATING.md)
 # - Set SUPERSET_LOG_LEVEL=debug in docker/.env-local for detailed logs
 # -----------------------------------------------------------------------
 x-superset-user: &superset-user root

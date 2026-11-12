@@ -44,6 +44,7 @@ case "$resolved" in
     echo "set a unique key in docker/.env-local first" >&2
     false ;;
 esac &&
+docker compose stop &&
 docker compose up -d db redis &&
 # 1. TEST_NON_DEV_SECRET -> default key
 docker compose run --rm --no-deps \
@@ -66,6 +67,7 @@ case "$resolved" in
     echo "set a unique key in docker/.env-local first" >&2
     false ;;
 esac &&
+docker compose -f docker-compose-light.yml stop &&
 docker compose -f docker-compose-light.yml up -d db-light &&
 docker compose -f docker-compose-light.yml run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
@@ -76,7 +78,7 @@ docker compose -f docker-compose-light.yml run --rm --no-deps -e FLASK_DEBUG=fal
 docker compose -f docker-compose-light.yml up -d
 ```
 
-The steps are chained with `&&`, so a failed check or hop does not continue. The key check runs before hop 1, so a missing or published key does not rewrite metadata. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. If hop 1 fails for only some values, those values were already written under the key in `docker/.env-local`. Move the remaining `TEST_NON_DEV_SECRET` values in one hop instead:
+The steps are chained with `&&`, so a failed check or hop does not continue. The key check runs before hop 1, so a missing or published key does not rewrite metadata. The block then stops the running stack so no container writes under the old key during the migration. `stop` keeps containers and named volumes. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. A failed hop logs `Re-encryption summary: N re-encrypted, N skipped, N null, N failed` and then `Re-encryption failed: Re-encryption failed for N value(s); transaction rolled back`. If every value failed, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. If only some values failed, those values were already written under the key in `docker/.env-local`. Move the remaining `TEST_NON_DEV_SECRET` values in one hop instead:
 
 ```bash
 docker compose run --rm --no-deps -e FLASK_DEBUG=false superset \
@@ -94,9 +96,9 @@ docker compose -f docker-compose-light.yml up -d
 
 That single hop still rolls back, without changing anything, if a row is also under `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Set the new key and re-encrypt before the next `docker compose up` so new rows are not written under a third key. Otherwise discard local metadata with `docker compose down -v`.
 
-For `docker-compose-non-dev.yml`, add `-f docker-compose-non-dev.yml` to every command in the first block, including the `docker compose config` check. It builds from this checkout and uses the `superset`, `db`, and `redis` service names. The `re-encrypted`, `skipped`, and `failed` counts above come from this repository's `re-encrypt-secrets`.
+For `docker-compose-non-dev.yml`, add `-f docker-compose-non-dev.yml` to every command in the first block, including the `docker compose config` check and `docker compose stop`. It builds from this checkout and uses the `superset`, `db`, and `redis` service names.
 
-`docker-compose-image-tag.yml` runs the published `apache/superset:${TAG}` image. That image does not use this repository's insecure-key list, so it can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off. The same key check runs before hop 1 and exits non-zero when the resolved key is missing or a published default:
+`docker-compose-image-tag.yml` runs the published `apache/superset:${TAG}` image. That image does not use this repository's insecure-key list, so it can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off. Its `re-encrypt-secrets` does not print the summary above, so those failure checks do not apply. The same key check runs before hop 1 and exits non-zero when the resolved key is missing or a published default:
 
 ```bash
 resolved=$(docker compose -f docker-compose-image-tag.yml config --format json superset \
@@ -106,6 +108,7 @@ case "$resolved" in
     echo "set a unique key in docker/.env-local first" >&2
     false ;;
 esac &&
+docker compose -f docker-compose-image-tag.yml stop &&
 docker compose -f docker-compose-image-tag.yml up -d db redis &&
 docker compose -f docker-compose-image-tag.yml run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
