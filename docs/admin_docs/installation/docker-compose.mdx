@@ -285,8 +285,10 @@ A volume created while the key was `TEST_NON_DEV_SECRET` (the old `docker/.env`)
 or the `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` fallback (no key set) must be
 re-encrypted before the next start. The block below handles both. Hop 1 skips
 rows already under the default key, and hop 2 moves them onto your new key.
-Saved database passwords, `encrypted_extra`, and OAuth tokens fail to decrypt
-until then, and `superset-init` can fail.
+Every encrypted value in the metadata database fails to decrypt until then:
+database connection passwords, `encrypted_extra` and `server_cert`, SSH tunnel
+credentials, OAuth tokens, and semantic layer configuration. `superset-init`
+can fail too.
 
 Set the new key with the snippet above first. The commands below use
 functions, so they run the same way in bash and zsh. Do not put comments

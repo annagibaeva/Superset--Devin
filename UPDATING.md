@@ -28,7 +28,7 @@ assists people when migrating to a new version.
 
 `docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known. Superset built from this repository refuses to start on that value or on `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` when `FLASK_DEBUG` is off.
 
-Set a unique key in gitignored `docker/.env-local` before the next `docker compose up`. If an existing Compose metadata volume was created with the old key, re-encrypt it first. Skip that when `docker/.env-local` already had a unique key. Otherwise saved database passwords, `encrypted_extra`, and OAuth tokens fail to decrypt, and `superset-init` can fail.
+Set a unique key in gitignored `docker/.env-local` before the next `docker compose up`. If an existing Compose metadata volume was created with the old key, re-encrypt it first. Skip that when `docker/.env-local` already had a unique key. Otherwise every encrypted value in the metadata database fails to decrypt: database connection passwords, `encrypted_extra` and `server_cert`, SSH tunnel credentials, OAuth tokens, and semantic layer configuration. `superset-init` can fail too.
 
 See [Re-encrypting an existing metadata volume](docs/admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume).
 
