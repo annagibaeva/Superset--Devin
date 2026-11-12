@@ -210,21 +210,23 @@ config` also prints that service's dependencies, so the snippet reads the key fr
 non-zero. A new or existing `docker/.env-local` is kept mode `600`:
 
 ```bash
-svc=superset
-if config=$(docker compose config --format json "$svc"); then
-  current=$(printf '%s\n' "$config" | awk -v s="$svc" '
-    /^    "[^"]+": \{/ { cur = $1; gsub(/[":]/, "", cur) }
-    cur == s && /^ *"SUPERSET_SECRET_KEY":/ {
-      sub(/^ *"SUPERSET_SECRET_KEY": *"/, ""); sub(/",?$/, ""); print }')
-  case "$current" in
-    ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
-      (umask 077 && printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local) ;;
-  esac
-  chmod 600 docker/.env-local 2>/dev/null || true
-else
-  echo "docker compose config failed; fix the error above, then rerun" >&2
-  false
-fi
+(
+  svc=superset
+  if config=$(docker compose config --format json "$svc"); then
+    current=$(printf '%s\n' "$config" | awk -v s="$svc" '
+      /^    "[^"]+": \{/ { cur = $1; gsub(/[":]/, "", cur) }
+      cur == s && /^ *"SUPERSET_SECRET_KEY":/ {
+        sub(/^ *"SUPERSET_SECRET_KEY": *"/, ""); sub(/",?$/, ""); print }')
+    case "$current" in
+      ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
+        (umask 077 && printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local) ;;
+    esac
+    chmod 600 docker/.env-local 2>/dev/null || true
+  else
+    echo "docker compose config failed; fix the error above, then rerun" >&2
+    false
+  fi
+)
 ```
 
 If you use `docker/.env-local.example`, copy it first
@@ -346,11 +348,14 @@ resolved=$(printf '%s\n' "$config" | awk -v s="$svc" '
   /^    "[^"]+": \{/ { cur = $1; gsub(/[":]/, "", cur) }
   cur == s && /^ *"SUPERSET_SECRET_KEY":/ {
     sub(/^ *"SUPERSET_SECRET_KEY": *"/, ""); sub(/",?$/, ""); print }') &&
+unset config &&
 case "$resolved" in
   ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
     echo "set a unique key in docker/.env-local first" >&2
+    unset resolved
     false ;;
 esac &&
+unset resolved &&
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" python -c 'from superset.app import create_app; create_app()' &&
 dc stop &&
@@ -362,6 +367,7 @@ dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
 dc up -d
+unset config resolved
 ```
 
 If the check step (`python -c ... create_app()`) fails, no rows have changed
@@ -380,14 +386,16 @@ rolls back, without writing, when a row is also under the default key. The
 single-hop command uses the same debug-off start, so a startup-check failure
 stops it before it writes.
 
-On the image-tag stack, a failed hop prints a traceback and no summary. The
-metadata is under a key other than the one that hop expected.
-
 ```bash
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
 dc up -d
 ```
+
+On the image-tag stack, a failed hop prints a traceback and no summary, and
+nothing is written. Run the single-hop command above. It succeeds without
+changes when the metadata is already under the key in `docker/.env-local`. If
+it fails too, the values were encrypted with a key you no longer have.
 
 ## 3. Log in to Superset
 
