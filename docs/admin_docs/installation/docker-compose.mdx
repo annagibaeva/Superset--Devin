@@ -309,8 +309,9 @@ with embedding on) stops the block before any rows change.
 The default, non-dev, and image-tag stacks share the `db_home` volume, so one
 run covers them. The light stack uses `db_home_light`. Light instances started
 with `-p <name>` each have their own `<name>_db_home_light` volume. Run the
-block once per instance, and put that `-p` name in the light `dc` function.
-Omit `-p` for a single light instance that was not started with a project name.
+block once per instance, and put that `-p` name and the instance's `NODE_PORT`
+in the light `dc` function. Omit `-p` and `NODE_PORT` for a single light
+instance that was not started with a project name.
 Before the light definitions in a shell where you exported the `make up`
 project name, run `unset COMPOSE_PROJECT_NAME`.
 
@@ -325,7 +326,7 @@ eval "$(./scripts/docker-compose-up.sh --env | grep '^export ')"
 Replace the three definitions for another stack:
 
 - Light, one `-p` instance:
-  `dc() { docker compose -p superset-1 -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d db-light; }`
+  `dc() { NODE_PORT=9002 docker compose -p superset-2 -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d db-light; }`
 - Non-dev: `dc() { docker compose -f docker-compose-non-dev.yml "$@"; }`
 - Image-tag: `dc() { docker compose -f docker-compose-image-tag.yml "$@"; }`
 

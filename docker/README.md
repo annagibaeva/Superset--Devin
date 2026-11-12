@@ -74,6 +74,10 @@ The database will initialize itself upon startup via the init container ([`super
 
 ## Normal Operation
 
+Set `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first start. If this
+checkout already has a metadata volume, re-encrypt it first. See
+[Re-encrypting an existing metadata volume](../docs/admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume).
+
 To run the container, simply run: `docker compose up`
 
 After waiting several minutes for Superset initialization to finish, you can open a browser and view [`http://localhost:8088`](http://localhost:8088)
@@ -81,7 +85,7 @@ to start your journey.
 
 ### Running Multiple Instances
 
-If you need to run multiple Superset instances simultaneously (e.g., different branches or clones), use the make targets which automatically find available ports:
+If you need to run multiple Superset instances simultaneously (e.g., different branches or clones), use the make targets which automatically find available ports. The secret key in `docker/.env-local` is still required, as described above:
 
 ```bash
 make up

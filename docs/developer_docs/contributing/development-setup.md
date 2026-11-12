@@ -49,6 +49,9 @@ cd superset
 ## docker compose (recommended!)
 
 Setting things up to squeeze a "hello world" into any part of Superset should be as simple as
+setting a unique `SUPERSET_SECRET_KEY` in `docker/.env-local` first. Existing metadata
+volumes must be re-encrypted before the next start. See
+[Re-encrypting an existing metadata volume](../../admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume).
 
 ```bash
 # getting docker compose to fire up services, and rebuilding if some docker layers have changed
@@ -141,7 +144,8 @@ docker-compose up
 ### Running multiple instances
 
 If you need to run multiple Superset clones simultaneously (e.g., testing different branches),
-use `make up` instead of `docker compose up`:
+use `make up` instead of `docker compose up`. Set `SUPERSET_SECRET_KEY` in
+`docker/.env-local` first, as described above:
 
 ```bash
 make up

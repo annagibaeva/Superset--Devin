@@ -21,6 +21,10 @@ Next, update the folder that mirrors the `superset` repo through git:
 git pull origin master
 ```
 
+`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. Before restarting, set a unique
+key in `docker/.env-local` and re-encrypt an existing metadata volume, as described in
+[Re-encrypting an existing metadata volume](/admin-docs/installation/docker-compose#re-encrypting-an-existing-metadata-volume).
+
 Then, restart the containers and any changed Docker images will be automatically pulled down:
 
 ```bash
