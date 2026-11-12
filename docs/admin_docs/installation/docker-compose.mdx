@@ -323,6 +323,12 @@ default-stack block:
 eval "$(./scripts/docker-compose-up.sh --env | grep '^export ')"
 ```
 
+If a second `docker-compose.yml` instance was started by exporting
+`COMPOSE_PROJECT_NAME` and the port variables in your shell, keep those same
+exports for this block. Exporting `DATABASE_PORT`, `REDIS_PORT`, or
+`SUPERSET_PORT` does not move the published ports on the non-dev or image-tag
+stacks. The light stack uses `NODE_PORT` only.
+
 Replace the three definitions for another stack:
 
 - Light, one `-p` instance:
@@ -330,8 +336,9 @@ Replace the three definitions for another stack:
 - Non-dev: `dc() { docker compose -f docker-compose-non-dev.yml "$@"; }`
 - Image-tag:
   `dc() { TAG=5.0.0 docker compose -f docker-compose-image-tag.yml "$@"; }`
-  Use the `TAG` the stack was started with. `dc ps --format '{{.Image}}'`
-  before the block shows it. Without `TAG`, every command uses `latest-dev`.
+  Replace `5.0.0` with the tag the stack was started with.
+  `dc ps -a --format '{{.Image}}'` shows it, including when the stack is
+  stopped. Without `TAG`, every command uses `latest-dev`.
 
 `docker-compose-image-tag.yml` runs the published `apache/superset` image. That
 image can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off, and its
