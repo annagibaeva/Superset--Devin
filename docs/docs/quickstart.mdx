@@ -27,7 +27,14 @@ git clone https://github.com/apache/superset
 
 ### 2. Start the latest official release of Superset
 
-Generate a unique `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first start. The [Docker Compose guide](/admin-docs/installation/docker-compose#configuring-further) has the command. `docker/.env-local` is gitignored, so the key stays the same when you switch tags. Without it, a missing key does not stop the stack (every Compose file loads `FLASK_DEBUG=true`): Superset logs a warning and runs on a publicly known key: `TEST_NON_DEV_SECRET` on release tags whose `docker/.env` still ships it (including 6.0.0), or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` on newer refs.
+Generate a unique `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first
+start. The
+[Docker Compose guide](/admin-docs/installation/docker-compose#configuring-further)
+has the command. `docker/.env-local` is gitignored, so the key stays the same
+when you switch tags. Without it, `FLASK_DEBUG=true` lets the stack start on a
+publicly known key. The 6.0.0 tag checked out below still sets
+`TEST_NON_DEV_SECRET` in `docker/.env`. A ref that leaves the key unset falls
+back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`.
 
 ```bash
 # Enter the repository you just cloned

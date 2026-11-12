@@ -75,6 +75,11 @@ images using `docker compose pull`, force a build with `docker compose build` or
 on latest base images using `docker compose build --pull`. In most cases though, the simple
 `up` command should do just fine. Refer to docker compose docs for more information on the topic.
 
+Before the first `docker compose up` with any option below, generate a unique
+`SUPERSET_SECRET_KEY` in `docker/.env-local` with the snippet under
+[Configuring Further](#configuring-further). Without it, `FLASK_DEBUG=true` lets the
+stack start on a publicly known key.
+
 ### Option #1 - for an interactive development environment
 
 ```bash
@@ -137,7 +142,10 @@ docker compose -f docker-compose-non-dev.yml up
 
 ### Option #4 - boot up an official release
 
-Generate a unique `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first start ([Configuring Further](#configuring-further) has the command). That file is gitignored, so the key stays the same across `git checkout`. Without it, `FLASK_DEBUG=true` lets the stack start on a publicly known key: `TEST_NON_DEV_SECRET` on release tags whose `docker/.env` still ships it (including 6.0.0), or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` on newer refs. Switching between those refs on the same Compose project changes the key and breaks stored secrets.
+`docker/.env-local` is gitignored, so the key stays the same across `git checkout`.
+Release tags whose `docker/.env` still ships `TEST_NON_DEV_SECRET` (including 6.0.0)
+use that value when no local key is set. Switching between those refs and a ref that
+leaves the key unset changes the key and breaks stored secrets.
 
 ```bash
 # Set the version you want to run
@@ -271,14 +279,14 @@ your terminal and/or in your `docker/.env` file.
 ### Re-encrypting an existing metadata volume
 
 Skip this section when `docker/.env-local` already had a unique
-`SUPERSET_SECRET_KEY`. Compose still loads that key, and the metadata is already
-encrypted with it.
+`SUPERSET_SECRET_KEY` when the volume was created.
 
-A volume created while `docker/.env` set `TEST_NON_DEV_SECRET` must be
-re-encrypted before the next start. An unset key falls back to
-`CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`, so saved database passwords,
-`encrypted_extra`, and OAuth tokens fail to decrypt, and `superset-init` can
-fail.
+A volume created while the key was `TEST_NON_DEV_SECRET` (the old `docker/.env`)
+or the `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` fallback (no key set) must be
+re-encrypted before the next start. The block below handles both. Hop 1 skips
+rows already under the default key, and hop 2 moves them onto your new key.
+Saved database passwords, `encrypted_extra`, and OAuth tokens fail to decrypt
+until then, and `superset-init` can fail.
 
 Set the new key with the snippet above first. The commands below use
 functions, so they run the same way in bash and zsh. Do not put comments
