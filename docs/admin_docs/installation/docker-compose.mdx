@@ -354,9 +354,10 @@ Do not re-encrypt with `docker-compose-image-tag.yml`. The published
 encrypted columns, prints that it processed every table, and exits 0 without
 moving any values. Keep the old key for that stack, or run this block with
 the default or non-dev definition from this checkout against the same Compose
-project so it uses the same `db_home` volume. Starting a different Superset
-version against that volume runs `superset db upgrade` and can move the
-schema forward.
+project so it uses the same `db_home` volume. The block upgrades that
+volume's schema to this checkout before it re-encrypts. That is the same
+upgrade the final `up` would run. Do not start an older Superset version
+against the volume after that.
 
 ```bash
 dc() { docker compose "$@"; }
@@ -383,19 +384,15 @@ dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" python -c 'from superset.app import create_app; create_app()' &&
 dc stop &&
 db_up &&
+dc run --rm --no-deps "$svc" superset db upgrade &&
 dc run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
-dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" python -c '
-from superset.app import create_app
-with create_app().app_context():
-    from superset.extensions import db
-    from superset.models.core import Database
-    db.session.query(Database).all()
-print("decrypt check OK")' &&
+dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
 dc up -d
 unset config resolved
 ```
@@ -420,22 +417,23 @@ single-hop command uses the same debug-off start, so a startup-check failure
 stops it before it writes.
 
 ```bash
+db_up &&
+dc run --rm --no-deps "$svc" superset db upgrade &&
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
-dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" python -c '
-from superset.app import create_app
-with create_app().app_context():
-    from superset.extensions import db
-    from superset.models.core import Database
-    db.session.query(Database).all()
-print("decrypt check OK")' &&
+dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
 dc up -d
 ```
 
-The decrypt check must print `decrypt check OK` before `dc up -d`. If it
-raises `Invalid decryption key`, the rows were not moved and the final `up`
-does not run. On a published image that check fails for the same reason the
-hops change nothing. Use a stack built from this checkout, or keep the old key.
+Before `dc up -d`, the block runs `re-encrypt-secrets` with a previous key
+that matches nothing. On this checkout that prints
+`Re-encryption complete: 0 re-encrypted, N skipped, N null, 0 failed.`
+When you have saved connections, SSH tunnels, OAuth tokens, or semantic layer
+configuration, confirm `N skipped` is greater than zero. A failure means some
+encrypted value is still unreadable, and `up` does not run. A published image
+prints no such summary and exits 0 without moving values. Do not use it for
+this step. A missing-table error means `superset db upgrade` did not run.
 
 ## 3. Log in to Superset
 
