@@ -193,13 +193,15 @@ preventing developers from risking committing potentially sensitive configuratio
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
 key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes a
 key unless the last `SUPERSET_SECRET_KEY`, read the way Compose reads it, is already a
-non-empty value other than the known insecure defaults. Quotes, a trailing carriage return,
-surrounding whitespace, and a trailing ` #` comment are ignored. Empty assignments,
-including `''` and `""`, and the published values `TEST_NON_DEV_SECRET` and
+non-empty value other than the known insecure defaults. Compose accepts an `export` prefix,
+leading whitespace, spaces around `=` or `:`, and a `KEY: value` line. Quotes, a trailing
+carriage return, surrounding whitespace, and a trailing ` #` comment are ignored. Empty
+assignments, including `''` and `""`, and the published values `TEST_NON_DEV_SECRET` and
 `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` do not count:
 
 ```bash
-current=$(grep '^SUPERSET_SECRET_KEY=' docker/.env-local 2>/dev/null | tail -n 1 | cut -d= -f2- \
+current=$(grep -E '^[[:space:]]*(export[[:space:]]+)?SUPERSET_SECRET_KEY[[:space:]]*[=:]' docker/.env-local 2>/dev/null \
+  | tail -n 1 | sed -E 's/^[^=:]*[=:]//' \
   | tr -d "'\"\r" | sed 's/[[:space:]]#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' || true)
 case "$current" in
   ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)

@@ -34,7 +34,7 @@ Metadata encrypted with the tracked `TEST_NON_DEV_SECRET` changes as soon as con
 
 Set a unique non-empty key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`). `superset-init` runs `superset init` and `superset load_examples` with `set -e`, and the `superset` service waits for that init to succeed, so a decrypt error leaves no app container to `docker compose exec` into. Re-encrypt from a one-off container that skips that dependency.
 
-`superset re-encrypt-secrets` tries only the current key and one `--previous_secret_key`. Any value that matches neither rolls the whole transaction back. After this change a metadata database can hold both keys: `TEST_NON_DEV_SECRET` from before the upgrade, and `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` from any boot with `SUPERSET_SECRET_KEY` unset. Move the rows in two hops so each run only has to cover two keys. Values the current key can already read are skipped. `-e` overrides `env_file` for that run only. `FLASK_DEBUG=true` lets that first run start with the publicly known default key.
+`superset re-encrypt-secrets` tries only the current key and one `--previous_secret_key`. Any value that matches neither rolls the whole transaction back. After this change a metadata database can hold both keys: `TEST_NON_DEV_SECRET` from before the upgrade, and `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` from any boot with `SUPERSET_SECRET_KEY` unset. Move the rows in two hops so each run only has to cover two keys. Values the current key can already read are skipped. `-e` overrides `env_file` for that run only. `FLASK_DEBUG=true` lets the first run start with the publicly known default key. The second run sets `FLASK_DEBUG=false`, so a missing or insecure key in `docker/.env-local` makes Superset exit before `docker compose up`.
 
 ```bash
 docker compose up -d db redis &&
@@ -42,8 +42,8 @@ docker compose up -d db redis &&
 docker compose run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
   superset superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
-# 2. default key -> the key in docker/.env-local
-docker compose run --rm --no-deps superset \
+# 2. default key -> the key in docker/.env-local (fails if that key is missing or insecure)
+docker compose run --rm --no-deps -e FLASK_DEBUG=false superset \
   superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
 docker compose up -d
@@ -56,13 +56,13 @@ docker compose -f docker-compose-light.yml up -d db-light &&
 docker compose -f docker-compose-light.yml run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
   superset-light superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
-docker compose -f docker-compose-light.yml run --rm --no-deps superset-light \
+docker compose -f docker-compose-light.yml run --rm --no-deps -e FLASK_DEBUG=false superset-light \
   superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
 docker compose -f docker-compose-light.yml up -d
 ```
 
-The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. Otherwise fix the cause and rerun the block, or discard local metadata with `docker compose down -v`.
+The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. If hop 2 exits with `Refusing to start due to insecure SECRET_KEY`, `docker/.env-local` has no unique key yet. Set one and rerun the block. Hop 1 skips rows it already moved. Otherwise fix the cause and rerun the block, or discard local metadata with `docker compose down -v`.
 
 Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names.
 
