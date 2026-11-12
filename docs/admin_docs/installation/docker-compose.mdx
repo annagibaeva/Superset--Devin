@@ -229,9 +229,9 @@ non-zero. A new or existing `docker/.env-local` is kept mode `600`:
 )
 ```
 
-If you use `docker/.env-local.example`, copy it first
-(`cp -n docker/.env-local.example docker/.env-local`) and then run the snippet.
-Copying the example over an existing `docker/.env-local` removes the key.
+Do not copy `docker/.env-local.example` over `docker/.env-local`. That removes
+the key, and its port values break in-container database and Redis connections.
+Use `make up` for extra instances.
 
 Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true`
 from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and
@@ -328,7 +328,10 @@ Replace the three definitions for another stack:
 - Light, one `-p` instance:
   `dc() { NODE_PORT=9002 docker compose -p superset-2 -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d db-light; }`
 - Non-dev: `dc() { docker compose -f docker-compose-non-dev.yml "$@"; }`
-- Image-tag: `dc() { docker compose -f docker-compose-image-tag.yml "$@"; }`
+- Image-tag:
+  `dc() { TAG=5.0.0 docker compose -f docker-compose-image-tag.yml "$@"; }`
+  Use the `TAG` the stack was started with. `dc ps --format '{{.Image}}'`
+  before the block shows it. Without `TAG`, every command uses `latest-dev`.
 
 `docker-compose-image-tag.yml` runs the published `apache/superset` image. That
 image can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off, and its
