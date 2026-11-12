@@ -38,6 +38,8 @@ intended for use with local development.
 
 To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file is loaded after `docker/.env` and can override any settings.
 
+`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key with `openssl rand -base64 42` and store it only in `docker/.env-local` before the first `docker compose up`. The [Docker Compose installation guide](../docs/admin_docs/installation/docker-compose.mdx) has the command. Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true` from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. If you already have a Docker Compose metadata database, follow the re-encryption steps in [Re-encrypting an existing metadata volume](../docs/admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume) after setting the new key and before the next `docker compose up`.
+
 #### Python Configuration
 
 In order to override configuration settings locally, simply make a copy of [`./docker/pythonpath_dev/superset_config_local.example`](./pythonpath_dev/superset_config_local.example)
@@ -72,6 +74,10 @@ The database will initialize itself upon startup via the init container ([`super
 
 ## Normal Operation
 
+Set `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first start. If this
+checkout already has a metadata volume, re-encrypt it first. See
+[Re-encrypting an existing metadata volume](../docs/admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume).
+
 To run the container, simply run: `docker compose up`
 
 After waiting several minutes for Superset initialization to finish, you can open a browser and view [`http://localhost:8088`](http://localhost:8088)
@@ -79,7 +85,7 @@ to start your journey.
 
 ### Running Multiple Instances
 
-If you need to run multiple Superset instances simultaneously (e.g., different branches or clones), use the make targets which automatically find available ports:
+If you need to run multiple Superset instances simultaneously (e.g., different branches or clones), use the make targets which automatically find available ports. The secret key in `docker/.env-local` is still required, as described above:
 
 ```bash
 make up

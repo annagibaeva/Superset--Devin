@@ -22,7 +22,9 @@
 # Features:
 #   - Auto-generates unique project name from directory
 #   - Finds available ports automatically
-#   - No manual .env-local editing needed
+#   - No manual port or project-name editing needed
+#   - SUPERSET_SECRET_KEY still has to be set in docker/.env-local
+#     (see docker/README.md)
 #
 # Usage:
 #   ./scripts/docker-compose-up.sh [docker-compose args...]

@@ -21,6 +21,12 @@ Next, update the folder that mirrors the `superset` repo through git:
 git pull origin master
 ```
 
+If your metadata volume was created while `docker/.env` set `TEST_NON_DEV_SECRET`
+(or with no key set) and you have not re-encrypted it yet, set a unique key in
+`docker/.env-local` and follow
+[Re-encrypting an existing metadata volume](/admin-docs/installation/docker-compose#re-encrypting-an-existing-metadata-volume)
+before restarting.
+
 Then, restart the containers and any changed Docker images will be automatically pulled down:
 
 ```bash

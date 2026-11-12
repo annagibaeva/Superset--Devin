@@ -24,6 +24,14 @@ assists people when migrating to a new version.
 
 ## Next
 
+### Docker Compose no longer ships a secret key
+
+`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known. Superset built from this repository refuses to start on that value or on `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` when `FLASK_DEBUG` is off.
+
+Set a unique key in gitignored `docker/.env-local` before the next `docker compose up`. If an existing Compose metadata volume was created with `TEST_NON_DEV_SECRET` (or with no key set) and has not been re-encrypted yet, re-encrypt it first. Otherwise every encrypted value in the metadata database fails to decrypt: database connection passwords, `encrypted_extra` and `server_cert`, SSH tunnel credentials, OAuth tokens, and semantic layer configuration. `superset-init` can fail too.
+
+See [Re-encrypting an existing metadata volume](docs/admin_docs/installation/docker-compose.mdx#re-encrypting-an-existing-metadata-volume).
+
 ### Dataset import validates catalog against the target connection
 
 Importing a dataset now validates the `catalog` field against the target database connection. When the connection has multi-catalog disabled (`allow_multi_catalog` off) and the dataset's catalog is not the connection's default catalog, the import fails instead of silently persisting the non-default catalog. This matches the validation already enforced on the dataset update path and prevents imported datasets from querying an unintended database.

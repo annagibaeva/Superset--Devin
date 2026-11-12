@@ -39,8 +39,9 @@ paths = [
   '''.*\.test\.[tj]sx?$''',
   '''.*fixtures?\.[A-Za-z]+$''',
   '''(^|/)cypress-base/''',
-  # Local dev / example deployment config (placeholder credentials)
-  '''(^|/)docker/\.env''',
+  # Tracked local-dev placeholders only. docker/.env-local holds the real key
+  # and stays in scope for the scanner.
+  '''^docker/\.env$''',
   '''^helm/superset/''',
   '''^superset/examples/''',
   '''(^|/)scripts/databases/''',
