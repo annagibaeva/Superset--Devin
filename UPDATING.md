@@ -30,12 +30,20 @@ assists people when migrating to a new version.
 
 Existing Docker Compose metadata databases were encrypted with that key. The key changes as soon as containers are recreated, including when `docker/.env-local` does not exist: an unset `SUPERSET_SECRET_KEY` falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Saved database passwords, `encrypted_extra`, certificates, and OAuth tokens then fail to decrypt, and `superset-init` can fail while reading the examples database.
 
-Set a unique non-empty key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`). `superset-init` runs `superset init` and `superset load_examples` with `set -e`, and the `superset` service waits for that init to succeed, so a decrypt error leaves no app container to `docker compose exec` into. Re-encrypt from a one-off container that skips that dependency. `run` loads `docker/.env` and `docker/.env-local`, so the new key is the current secret:
+Set a unique non-empty key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`). `superset-init` runs `superset init` and `superset load_examples` with `set -e`, and the `superset` service waits for that init to succeed, so a decrypt error leaves no app container to `docker compose exec` into. Re-encrypt from a one-off container that skips that dependency.
+
+`superset re-encrypt-secrets` tries only the current key and one `--previous_secret_key`. Any value that matches neither rolls the whole transaction back. After this change a metadata database can hold both keys: `TEST_NON_DEV_SECRET` from before the upgrade, and `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` from any boot with `SUPERSET_SECRET_KEY` unset. Move the rows in two hops so each run only has to cover two keys. Values the current key can already read are skipped. `-e` overrides `env_file` for that run only. `FLASK_DEBUG=true` lets that first run start with the publicly known default key.
 
 ```bash
 docker compose up -d db redis
+# 1. TEST_NON_DEV_SECRET -> default key
+docker compose run --rm --no-deps \
+  -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
+  superset superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
+# 2. default key -> the key in docker/.env-local
 docker compose run --rm --no-deps superset \
-  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
+  superset re-encrypt-secrets \
+  --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET
 docker compose up -d
 ```
 
@@ -43,12 +51,16 @@ With `docker-compose-light.yml` there is no Redis service, and the app service i
 
 ```bash
 docker compose -f docker-compose-light.yml up -d db-light
+docker compose -f docker-compose-light.yml run --rm --no-deps \
+  -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
+  superset-light superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
 docker compose -f docker-compose-light.yml run --rm --no-deps superset-light \
-  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
+  superset re-encrypt-secrets \
+  --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET
 docker compose -f docker-compose-light.yml up -d
 ```
 
-Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names. Values already readable with the current key are skipped. If the command rolls back because some rows were written under the default key after a boot without `docker/.env-local`, run it again with `--previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`, or discard local metadata with `docker compose down -v`.
+Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names. To discard local metadata instead, run `docker compose down -v`.
 
 Local development with `FLASK_DEBUG=true` still starts without `docker/.env-local` and logs a warning. A non-debug boot refuses to start until a unique key is set.
 
