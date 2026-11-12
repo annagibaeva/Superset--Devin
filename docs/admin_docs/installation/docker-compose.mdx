@@ -207,7 +207,8 @@ when the value Compose resolves for the `superset` service is empty or one of th
 defaults (`TEST_NON_DEV_SECRET` or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`). `docker compose
 config` also prints that service's dependencies, so the snippet reads the key from the
 `superset` object only. A failed config leaves the file unchanged and the snippet exits
-non-zero. A new or existing `docker/.env-local` is kept mode `600`:
+non-zero. A new or existing `docker/.env-local` is kept mode `600`. If
+`openssl` fails, the snippet exits non-zero and does not write an empty key:
 
 ```bash
 (
@@ -219,9 +220,14 @@ non-zero. A new or existing `docker/.env-local` is kept mode `600`:
         sub(/^ *"SUPERSET_SECRET_KEY": *"/, ""); sub(/",?$/, ""); print }')
     case "$current" in
       ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
-        (umask 077 && printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local) ;;
+        key=$(openssl rand -base64 42) && [ -n "$key" ] || {
+          echo "openssl rand failed; docker/.env-local was not changed" >&2
+          exit 1
+        }
+        (umask 077 && printf '\nSUPERSET_SECRET_KEY=%s\n' "$key" >> docker/.env-local) || exit 1
+        unset key ;;
     esac
-    chmod 600 docker/.env-local 2>/dev/null || true
+    [ ! -e docker/.env-local ] || chmod 600 docker/.env-local
   else
     echo "docker compose config failed; fix the error above, then rerun" >&2
     false
