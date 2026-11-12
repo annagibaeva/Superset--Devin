@@ -392,8 +392,7 @@ dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
 dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
-  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
-dc up -d
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key
 unset config resolved
 ```
 
@@ -414,12 +413,12 @@ metadata is already under the key in `docker/.env-local`:
 ```bash
 db_up &&
 dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
-  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
-dc up -d
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key
 ```
 
-If that check also reports failures, the volume uses a key you no longer have.
-Restore that key in `docker/.env-local` instead of starting the stack. If only
+If that check succeeds, confirm `N skipped` as described below, then run
+`dc up -d`. If it also reports failures, the volume uses a key you no longer
+have. Restore that key in `docker/.env-local` instead of starting the stack. If only
 some values failed, those rows are already under the new key. Move the
 remaining `TEST_NON_DEV_SECRET` rows in one hop. That hop still
 rolls back, without writing, when a row is also under the default key. The
@@ -432,18 +431,21 @@ dc run --rm --no-deps "$svc" superset db upgrade &&
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
 dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" \
-  superset re-encrypt-secrets --previous_secret_key not-a-real-key &&
-dc up -d
+  superset re-encrypt-secrets --previous_secret_key not-a-real-key
 ```
 
-Before `dc up -d`, the block runs `re-encrypt-secrets` with a previous key
+The last command in each block runs `re-encrypt-secrets` with a previous key
 that matches nothing. On this checkout that prints
 `Re-encryption complete: 0 re-encrypted, N skipped, N null, 0 failed.`
 When you have saved connections, SSH tunnels, OAuth tokens, or semantic layer
-configuration, confirm `N skipped` is greater than zero. A failure means some
-encrypted value is still unreadable, and `up` does not run. A published image
-prints no such summary and exits 0 without moving values. Do not use it for
-this step. A missing-table error means `superset db upgrade` did not run.
+configuration, confirm `N skipped` is greater than zero, then run `dc up -d`.
+A failure means some encrypted value is still unreadable. Do not start the
+stack. A published image prints no such summary and exits 0 without moving
+values. Do not use it for this step. A missing-table error means `superset db
+upgrade` did not run.
+
+Run the recovery blocks in the same shell as the main block. They use its
+`dc`, `svc`, and `db_up` definitions.
 
 ## 3. Log in to Superset
 
