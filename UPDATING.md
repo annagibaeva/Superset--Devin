@@ -30,16 +30,25 @@ assists people when migrating to a new version.
 
 Existing Docker Compose metadata databases were encrypted with that key. The key changes as soon as containers are recreated, including when `docker/.env-local` does not exist: an unset `SUPERSET_SECRET_KEY` falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Saved database passwords, `encrypted_extra`, certificates, and OAuth tokens then fail to decrypt, and `superset-init` can fail while reading the examples database.
 
-Set a unique key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`), recreate the containers so they load that key, then re-encrypt once:
+Set a unique non-empty key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`). `superset-init` runs `superset init` and `superset load_examples` with `set -e`, and the `superset` service waits for that init to succeed, so a decrypt error leaves no app container to `docker compose exec` into. Re-encrypt from a one-off container that skips that dependency. `run` loads `docker/.env` and `docker/.env-local`, so the new key is the current secret:
 
 ```bash
-docker compose exec superset superset re-encrypt-secrets \
-  --previous_secret_key TEST_NON_DEV_SECRET
+docker compose up -d db redis
+docker compose run --rm --no-deps superset \
+  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
+docker compose up -d
 ```
 
-Run that command only after the new key is the process's current secret. Values already readable with the current key are skipped. If the command rolls back because some rows were written under the default key after a boot without `docker/.env-local`, re-encrypt those with `--previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` in a separate run, or discard local metadata with `docker compose down -v`.
+With `docker-compose-light.yml` there is no Redis service, and the app service is `superset-light`:
 
-On `docker-compose-light.yml` the service name is `superset-light`.
+```bash
+docker compose -f docker-compose-light.yml up -d db-light
+docker compose -f docker-compose-light.yml run --rm --no-deps superset-light \
+  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET
+docker compose -f docker-compose-light.yml up -d
+```
+
+Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names. Values already readable with the current key are skipped. If the command rolls back because some rows were written under the default key after a boot without `docker/.env-local`, run it again with `--previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`, or discard local metadata with `docker compose down -v`.
 
 Local development with `FLASK_DEBUG=true` still starts without `docker/.env-local` and logs a warning. A non-debug boot refuses to start until a unique key is set.
 

@@ -191,11 +191,12 @@ Also note that `docker/.env-local` is referenced in our `.gitignore`,
 preventing developers from risking committing potentially sensitive configuration to the repository.
 
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
-key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes the
-key when the file does not already contain one:
+key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes a
+key when the file has no non-empty `SUPERSET_SECRET_KEY` (an empty `SUPERSET_SECRET_KEY=`
+does not count):
 
 ```bash
-grep -q '^SUPERSET_SECRET_KEY=' docker/.env-local 2>/dev/null || \
+grep -q '^SUPERSET_SECRET_KEY=.' docker/.env-local 2>/dev/null || \
   printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local
 ```
 
