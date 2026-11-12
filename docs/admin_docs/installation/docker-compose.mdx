@@ -297,8 +297,12 @@ that were created with the old key. It keeps containers and named volumes.
 
 The first re-encrypt moves `TEST_NON_DEV_SECRET` onto the default key.
 `FLASK_DEBUG=true` lets that hop start. The second moves those rows onto the
-key in `docker/.env-local`. `FLASK_DEBUG=false` makes an image built from this
-repository refuse a missing or insecure key before the final `up`.
+key in `docker/.env-local` with `FLASK_DEBUG=false`. That same debug-off start
+also runs every other startup check, including the guest-token check when
+`EMBEDDED_SUPERSET` is on and `GUEST_TOKEN_JWT_SECRET` is still the default.
+A preflight `create_app()` uses hop 2's environment before hop 1 writes.
+`SystemExit` from those checks is not caught by `create_app()`, so the chain
+stops.
 
 The default, non-dev, and image-tag stacks share the `db_home` volume, so one
 run covers them. The light stack uses `db_home_light`. Light instances started
@@ -349,6 +353,8 @@ case "$resolved" in
 esac &&
 dc stop &&
 db_up &&
+dc run --rm --no-deps -e FLASK_DEBUG=false \
+  "$svc" python -c 'from superset.app import create_app; create_app()' &&
 dc run --rm --no-deps \
   -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
@@ -365,7 +371,12 @@ If every value failed, the metadata is probably already under the key in
 `docker/.env-local`. Start the stack with `dc up -d`. If only some values
 failed, those rows are already under the new key. Move the remaining
 `TEST_NON_DEV_SECRET` rows in one hop. That hop still rolls back, without
-writing, when a row is also under the default key.
+writing, when a row is also under the default key. A hop 2 failure with no
+`Re-encryption summary` line is a startup check. Fix the setting it names, for
+example set `GUEST_TOKEN_JWT_SECRET` in `superset_config_docker.py` when
+embedding is on, and run the block again. Hop 1 then skips rows it already
+moved. The single-hop command uses the same debug-off start, so that message
+can stop it before it writes.
 
 ```bash
 dc run --rm --no-deps -e FLASK_DEBUG=false \
