@@ -38,7 +38,7 @@ intended for use with local development.
 
 To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file is loaded after `docker/.env` and can override any settings.
 
-`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key with `openssl rand -base64 42` and store it only in `docker/.env-local`. The [Docker Compose installation guide](../docs/admin_docs/installation/docker-compose.mdx) has the command. Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to start when the key is missing or set to a known insecure value. Existing metadata databases need a one-time re-encrypt; see [UPDATING.md](../UPDATING.md).
+`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key with `openssl rand -base64 42` and store it only in `docker/.env-local` before the first `docker compose up`. The [Docker Compose installation guide](../docs/admin_docs/installation/docker-compose.mdx) has the command. Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true` from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Superset refuses to start on an insecure key only when `FLASK_DEBUG` is off. Existing metadata databases need a one-time re-encrypt; see [UPDATING.md](../UPDATING.md).
 
 #### Python Configuration
 

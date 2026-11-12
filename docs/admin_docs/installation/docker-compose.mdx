@@ -209,9 +209,12 @@ case "$current" in
 esac
 ```
 
-Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to
-start when the key is missing or set to a known insecure value. If you already have a Docker
-Compose metadata database, re-encrypt stored secrets after setting the new key. See
+Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true`
+from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and
+falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Run the snippet
+above before the first `docker compose up`. Superset refuses to start on an insecure key
+only when `FLASK_DEBUG` is off. If you already have a Docker Compose metadata database,
+re-encrypt stored secrets after setting the new key. See
 [UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md).
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`
