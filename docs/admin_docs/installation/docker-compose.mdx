@@ -221,9 +221,66 @@ Do not commit that file or the generated value. Every Compose file loads `FLASK_
 from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and
 falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Run the snippet
 above before the first `docker compose up`. If you already have a Docker Compose metadata
-database, follow the re-encryption steps in
-[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md#docker-compose-no-longer-ships-a-secret-key) after setting the
-new key and before the next `docker compose up`.
+database, re-encrypt it after setting the new key and before the next
+`docker compose up`. The steps are in the next section.
+
+### Re-encrypting an existing metadata volume
+
+Skip this section when `docker/.env-local` already had a unique `SUPERSET_SECRET_KEY`. Compose still loads that key, and the metadata is already encrypted with it.
+
+A volume created while `docker/.env` set `TEST_NON_DEV_SECRET` must be re-encrypted before the next start. An unset key falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`, so saved database passwords, `encrypted_extra`, and OAuth tokens fail to decrypt, and `superset-init` can fail.
+
+Set the new key with the snippet above first. The commands below use functions, so they run the same way in bash and zsh. Do not put comments inside the `&&` chain. A failed `docker compose config` prints its own error and stops. It does not ask you to replace a key that is already set. A missing or published key stops before any rows change. `stop` then stops containers that were created with the old key. It keeps containers and named volumes.
+
+The first re-encrypt moves `TEST_NON_DEV_SECRET` onto the default key. `FLASK_DEBUG=true` lets that hop start. The second moves those rows onto the key in `docker/.env-local`. `FLASK_DEBUG=false` makes an image built from this repository refuse a missing or insecure key before the final `up`.
+
+The default, non-dev, and image-tag stacks share the `db_home` volume, so one run covers them. The light stack uses `db_home_light`. If you used that stack too, run the block again with the light definitions. A stack started with `make up` uses that script's project name and ports, which can differ from plain `docker compose`. In the same shell, before the block:
+
+```bash
+eval "$(./scripts/docker-compose-up.sh --env | grep '^export ')"
+```
+
+Replace the three definitions for another stack:
+
+- Light: `dc() { docker compose -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d db-light; }`
+- Non-dev: `dc() { docker compose -f docker-compose-non-dev.yml "$@"; }`
+- Image-tag: `dc() { docker compose -f docker-compose-image-tag.yml "$@"; }`
+
+`docker-compose-image-tag.yml` runs the published `apache/superset` image. That image can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off, and its `re-encrypt-secrets` does not print the summary below. The config check still stops a missing or published key before any rows change.
+
+```bash
+dc() { docker compose "$@"; }
+svc=superset
+db_up() { dc up -d db redis; }
+config=$(dc config --format json "$svc") || {
+  echo "docker compose config failed; fix the error above" >&2
+  false
+} &&
+resolved=$(printf '%s\n' "$config" \
+  | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1) &&
+case "$resolved" in
+  ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
+    echo "set a unique key in docker/.env-local first" >&2
+    false ;;
+esac &&
+dc stop &&
+db_up &&
+dc run --rm --no-deps \
+  -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
+  "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
+dc run --rm --no-deps -e FLASK_DEBUG=false \
+  "$svc" superset re-encrypt-secrets \
+  --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
+dc up -d
+```
+
+A failed hop from this repository logs `Re-encryption summary: N re-encrypted, N skipped, N null, N failed` and then `Re-encryption failed: Re-encryption failed for N value(s); transaction rolled back`. If every value failed, the metadata is probably already under the key in `docker/.env-local`. Start the stack with `dc up -d`. If only some values failed, those rows are already under the new key. Move the remaining `TEST_NON_DEV_SECRET` rows in one hop. That hop still rolls back, without writing, when a row is also under the default key.
+
+```bash
+dc run --rm --no-deps -e FLASK_DEBUG=false \
+  "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
+dc up -d
+```
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`
 container will populate example data and visualizations into the metadata database. These examples
