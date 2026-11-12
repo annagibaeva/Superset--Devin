@@ -137,6 +137,8 @@ docker compose -f docker-compose-non-dev.yml up
 
 ### Option #4 - boot up an official release
 
+Generate a unique `SUPERSET_SECRET_KEY` in `docker/.env-local` before the first start ([Configuring Further](#configuring-further) has the command). That file is gitignored, so the key stays the same across `git checkout`. Without it, `FLASK_DEBUG=true` lets the stack start on a publicly known key: `TEST_NON_DEV_SECRET` on release tags whose `docker/.env` still ships it (including 6.0.0), or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` on newer refs. Switching between those refs on the same Compose project changes the key and breaks stored secrets.
+
 ```bash
 # Set the version you want to run
 export TAG=5.0.0
@@ -208,6 +210,8 @@ case "$current" in
     printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
 esac
 ```
+
+If you use `docker/.env-local.example`, copy it first (`cp -n docker/.env-local.example docker/.env-local`) and then run the snippet. Copying the example over an existing `docker/.env-local` removes the key.
 
 Do not commit that file or the generated value. Every Compose file loads `FLASK_DEBUG=true`
 from `docker/.env`, so a missing key does not stop the stack: Superset logs a warning and
