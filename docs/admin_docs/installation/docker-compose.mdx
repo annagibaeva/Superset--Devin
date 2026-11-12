@@ -194,17 +194,13 @@ preventing developers from risking committing potentially sensitive configuratio
 
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
 key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes a
-key unless the last `SUPERSET_SECRET_KEY`, read the way Compose reads it, is already a
-non-empty value other than the known insecure defaults. Compose accepts an `export` prefix,
-leading whitespace, spaces around `=` or `:`, and a `KEY: value` line. Quotes, a trailing
-carriage return, surrounding whitespace, and a trailing ` #` comment are ignored. Empty
-assignments, including `''` and `""`, and the published values `TEST_NON_DEV_SECRET` and
-`CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` do not count:
+key unless the value Compose resolves for the `superset` service is already non-empty and
+not one of the published defaults (`TEST_NON_DEV_SECRET` or
+`CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`):
 
 ```bash
-current=$(grep -E '^[[:space:]]*(export[[:space:]]+)?SUPERSET_SECRET_KEY[[:space:]]*[=:]' docker/.env-local 2>/dev/null \
-  | tail -n 1 | sed -E 's/^[^=:]*[=:]//' \
-  | tr -d "'\"\r" | sed 's/[[:space:]]#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+current=$(docker compose config --format json superset 2>/dev/null \
+  | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1)
 case "$current" in
   ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
     printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local ;;
@@ -218,8 +214,9 @@ from `docker/.env`, so a missing key does not stop the stack: Superset logs a wa
 falls back to the publicly known `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Run the snippet
 above before the first `docker compose up`. Superset refuses to start on an insecure key
 only when `FLASK_DEBUG` is off. If you already have a Docker Compose metadata database,
-re-encrypt stored secrets after setting the new key. See
-[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md).
+follow the re-encryption steps in
+[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md) after setting the
+new key and before the next `docker compose up`.
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`
 container will populate example data and visualizations into the metadata database. These examples

@@ -62,7 +62,23 @@ docker compose -f docker-compose-light.yml run --rm --no-deps -e FLASK_DEBUG=fal
 docker compose -f docker-compose-light.yml up -d
 ```
 
-The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. If hop 2 exits with `Refusing to start due to insecure SECRET_KEY`, `docker/.env-local` has no unique key yet. Set one and rerun the block. Hop 1 skips rows it already moved. Otherwise fix the cause and rerun the block, or discard local metadata with `docker compose down -v`.
+The steps are chained with `&&`, so a failed hop does not continue into `docker compose up`. If hop 1 fails, its transaction is rolled back and the metadata is unchanged. If hop 1 reports failures for every encrypted value, the metadata is probably already under the key in `docker/.env-local`; start the stack normally with `docker compose up -d`. If hop 2 exits with `Refusing to start due to insecure SECRET_KEY`, `docker/.env-local` has no unique key yet. Set one and rerun the block. Hop 1 skips rows it already moved. If hop 1 fails for only some values, those values were already written under the key in `docker/.env-local`. Move the remaining `TEST_NON_DEV_SECRET` values in one hop instead:
+
+```bash
+docker compose run --rm --no-deps -e FLASK_DEBUG=false superset \
+  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
+docker compose up -d
+```
+
+With the light stack:
+
+```bash
+docker compose -f docker-compose-light.yml run --rm --no-deps -e FLASK_DEBUG=false superset-light \
+  superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
+docker compose -f docker-compose-light.yml up -d
+```
+
+That single hop still rolls back, without changing anything, if a row is also under `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Set the new key and re-encrypt before the next `docker compose up` so new rows are not written under a third key. Otherwise discard local metadata with `docker compose down -v`.
 
 Pass the same `-f` file for `docker-compose-non-dev.yml` and `docker-compose-image-tag.yml`; those files use the `superset`, `db`, and `redis` service names.
 
