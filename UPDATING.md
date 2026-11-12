@@ -26,7 +26,7 @@ assists people when migrating to a new version.
 
 ### Docker Compose no longer ships a secret key
 
-`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known. Superset built from this repository refuses to start on `TEST_NON_DEV_SECRET` or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` when `FLASK_DEBUG` is off. Published `apache/superset` images accept `TEST_NON_DEV_SECRET`. The 6.0.0 image rejects only `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Current upstream master also rejects an empty key.
+`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known. Superset built from this repository refuses to start on that value or on `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` when `FLASK_DEBUG` is off.
 
 Skip the re-encryption below if `docker/.env-local` already set a unique `SUPERSET_SECRET_KEY` before this upgrade. Compose still loads that key, and the metadata is already encrypted with it.
 
@@ -82,20 +82,26 @@ That single hop still rolls back, without changing anything, if a row is also un
 
 Pass the same `-f` file for `docker-compose-non-dev.yml`. It builds from this checkout and uses the `superset`, `db`, and `redis` service names. The `re-encrypted`, `skipped`, and `failed` counts above come from this repository's `re-encrypt-secrets`.
 
-`docker-compose-image-tag.yml` runs the published `apache/superset:${TAG}` image. Its command output and insecure-key check can differ, and it accepts `TEST_NON_DEV_SECRET` outside debug mode. Before hop 2 on that stack, confirm Compose resolves a key that is not missing and not a published default:
+`docker-compose-image-tag.yml` runs the published `apache/superset:${TAG}` image. That image does not use this repository's insecure-key list, so it can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off. The check below exits non-zero when the resolved key is missing or a published default, which stops the chain before hop 2:
 
 ```bash
+docker compose -f docker-compose-image-tag.yml up -d db redis &&
+docker compose -f docker-compose-image-tag.yml run --rm --no-deps \
+  -e SUPERSET_SECRET_KEY=CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET -e FLASK_DEBUG=true \
+  superset superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
 resolved=$(docker compose -f docker-compose-image-tag.yml config --format json superset \
-  | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1)
+  | sed -n 's/^ *"SUPERSET_SECRET_KEY": *"\(.*\)",\{0,1\}$/\1/p' | tail -n 1) &&
 case "$resolved" in
   ""|TEST_NON_DEV_SECRET|CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET)
-    echo "set a unique key in docker/.env-local first" >&2 ;;
-esac
+    echo "set a unique key in docker/.env-local first" >&2
+    false ;;
+esac &&
+docker compose -f docker-compose-image-tag.yml run --rm --no-deps -e FLASK_DEBUG=false superset \
+  superset re-encrypt-secrets --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
+docker compose -f docker-compose-image-tag.yml up -d
 ```
 
-A unique key prints nothing. If the warning prints, set a unique key before continuing. A leftover `TEST_NON_DEV_SECRET` in `docker/.env-local` is accepted by the published image, and hop 2 would move every row onto that public key.
-
-Local builds with `FLASK_DEBUG=true` still start without `docker/.env-local` and log a warning. Superset built from this repository refuses to start on `TEST_NON_DEV_SECRET` or `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` when `FLASK_DEBUG` is off.
+Local builds with `FLASK_DEBUG=true` still start without `docker/.env-local` and log a warning.
 
 ### Dataset import validates catalog against the target connection
 
