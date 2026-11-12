@@ -191,14 +191,18 @@ Also note that `docker/.env-local` is referenced in our `.gitignore`,
 preventing developers from risking committing potentially sensitive configuration to the repository.
 
 `SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique
-key and store it only in `docker/.env-local`:
+key with `openssl rand -base64 42` and store it only in `docker/.env-local`. This writes the
+key when the file does not already contain one:
 
 ```bash
-echo "SUPERSET_SECRET_KEY=$(openssl rand -base64 42)" >> docker/.env-local
+grep -q '^SUPERSET_SECRET_KEY=' docker/.env-local 2>/dev/null || \
+  printf '\nSUPERSET_SECRET_KEY=%s\n' "$(openssl rand -base64 42)" >> docker/.env-local
 ```
 
 Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to
-start when the key is missing or set to a known insecure value.
+start when the key is missing or set to a known insecure value. If you already have a Docker
+Compose metadata database, re-encrypt stored secrets after setting the new key. See
+[UPDATING.md](https://github.com/apache/superset/blob/master/UPDATING.md).
 
 One important variable is `SUPERSET_LOAD_EXAMPLES` which determines whether the `superset_init`
 container will populate example data and visualizations into the metadata database. These examples

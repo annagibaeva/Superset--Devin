@@ -26,13 +26,22 @@ assists people when migrating to a new version.
 
 ### Docker Compose no longer ships a secret key
 
-`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value is publicly known and is rejected outside debug/test mode. Generate a unique key and put it in the gitignored override file:
+`docker/.env` no longer sets `SUPERSET_SECRET_KEY`. The previous value, `TEST_NON_DEV_SECRET`, is publicly known and is rejected outside debug/test mode.
+
+Existing Docker Compose metadata databases were encrypted with that key. The key changes as soon as containers are recreated, including when `docker/.env-local` does not exist: an unset `SUPERSET_SECRET_KEY` falls back to `CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET`. Saved database passwords, `encrypted_extra`, certificates, and OAuth tokens then fail to decrypt, and `superset-init` can fail while reading the examples database.
+
+Set a unique key in gitignored `docker/.env-local` first (see the Docker Compose installation guide; generate one with `openssl rand -base64 42`), recreate the containers so they load that key, then re-encrypt once:
 
 ```bash
-echo "SUPERSET_SECRET_KEY=$(openssl rand -base64 42)" >> docker/.env-local
+docker compose exec superset superset re-encrypt-secrets \
+  --previous_secret_key TEST_NON_DEV_SECRET
 ```
 
-Local development with `FLASK_DEBUG=true` still starts without that file: Superset falls back to the default insecure key and logs a warning. A non-debug boot refuses to start until a unique key is set. After you set a new key, existing local sessions and any values encrypted with the old key must be recreated.
+Run that command only after the new key is the process's current secret. Values already readable with the current key are skipped. If the command rolls back because some rows were written under the default key after a boot without `docker/.env-local`, re-encrypt those with `--previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET` in a separate run, or discard local metadata with `docker compose down -v`.
+
+On `docker-compose-light.yml` the service name is `superset-light`.
+
+Local development with `FLASK_DEBUG=true` still starts without `docker/.env-local` and logs a warning. A non-debug boot refuses to start until a unique key is set.
 
 ### Dataset import validates catalog against the target connection
 

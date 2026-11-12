@@ -38,13 +38,7 @@ intended for use with local development.
 
 To override environment variables locally, create a `./docker/.env-local` file (git-ignored). This file is loaded after `docker/.env` and can override any settings.
 
-`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key and store it only in `docker/.env-local`:
-
-```bash
-echo "SUPERSET_SECRET_KEY=$(openssl rand -base64 42)" >> docker/.env-local
-```
-
-Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to start when the key is missing or set to a known insecure value.
+`SUPERSET_SECRET_KEY` is intentionally unset in the tracked `docker/.env`. Generate a unique key with `openssl rand -base64 42` and store it only in `docker/.env-local`. The [Docker Compose installation guide](../docs/admin_docs/installation/docker-compose.mdx) has the command. Do not commit that file or the generated value. Outside debug/test mode, Superset refuses to start when the key is missing or set to a known insecure value. Existing metadata databases need a one-time re-encrypt; see [UPDATING.md](../UPDATING.md).
 
 #### Python Configuration
 
