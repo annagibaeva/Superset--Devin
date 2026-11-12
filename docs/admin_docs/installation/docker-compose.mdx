@@ -311,9 +311,12 @@ The first re-encrypt moves `TEST_NON_DEV_SECRET` onto the default key with
 startup checks. The block starts only the database services, then runs those
 same checks, and only then stops the app. A bad setting (for example the
 default `GUEST_TOKEN_JWT_SECRET` with embedding on) stops the block before any
-rows change and before the running app is stopped. The database services do
-not read `SUPERSET_SECRET_KEY`. A `Cannot connect to database` error means
-that database start failed, not a Superset setting.
+rows change and before the running app is stopped. Postgres does not use
+`SUPERSET_SECRET_KEY`, but the database service loads `docker/.env-local`, so
+a plain `up` replaces a running database container after the key is added.
+`db_up` uses `--no-recreate`, so an already running database stays as it is
+and a stopped one is started. A `Cannot connect to database` error means that
+start failed, not a Superset setting.
 
 The default, non-dev, and image-tag stacks share the `db_home` volume, so one
 run covers them. The light stack uses `db_home_light`. Light instances started
@@ -343,25 +346,22 @@ stacks. The light stack uses `NODE_PORT` only.
 Replace the three definitions for another stack:
 
 - Light, one `-p` instance:
-  `dc() { NODE_PORT=9002 docker compose -p superset-2 -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d db-light; }`
+  `dc() { NODE_PORT=9002 docker compose -p superset-2 -f docker-compose-light.yml "$@"; }; svc=superset-light; db_up() { dc up -d --no-recreate db-light; }`
 - Non-dev: `dc() { docker compose -f docker-compose-non-dev.yml "$@"; }`
-- Image-tag:
-  `dc() { TAG=5.0.0 docker compose -f docker-compose-image-tag.yml "$@"; }`
-  Replace `5.0.0` with the tag the stack was started with.
-  `dc ps -a --format '{{.Image}}'` shows it, including when the stack is
-  stopped. Without `TAG`, every command uses `latest-dev`.
 
-`docker-compose-image-tag.yml` runs the published `apache/superset` image. That
-image can accept `TEST_NON_DEV_SECRET` even when `FLASK_DEBUG` is off, and its
-`re-encrypt-secrets` does not print the summary below. The config check still
-stops a missing or published key before any rows change. `docker compose config`
-also prints dependencies, so the check reads `SUPERSET_SECRET_KEY` from `$svc`
-only.
+Do not re-encrypt with `docker-compose-image-tag.yml`. The published
+`apache/superset` image's `re-encrypt-secrets` does not see Superset's
+encrypted columns, prints that it processed every table, and exits 0 without
+moving any values. Keep the old key for that stack, or run this block with
+the default or non-dev definition from this checkout against the same Compose
+project so it uses the same `db_home` volume. Starting a different Superset
+version against that volume runs `superset db upgrade` and can move the
+schema forward.
 
 ```bash
 dc() { docker compose "$@"; }
 svc=superset
-db_up() { dc up -d db redis; }
+db_up() { dc up -d --no-recreate db redis; }
 config=$(dc config --format json "$svc") || {
   echo "docker compose config failed; fix the error above" >&2
   false
@@ -389,6 +389,13 @@ dc run --rm --no-deps \
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets \
   --previous_secret_key CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET &&
+dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" python -c '
+from superset.app import create_app
+with create_app().app_context():
+    from superset.extensions import db
+    from superset.models.core import Database
+    db.session.query(Database).all()
+print("decrypt check OK")' &&
 dc up -d
 unset config resolved
 ```
@@ -415,13 +422,20 @@ stops it before it writes.
 ```bash
 dc run --rm --no-deps -e FLASK_DEBUG=false \
   "$svc" superset re-encrypt-secrets --previous_secret_key TEST_NON_DEV_SECRET &&
+dc run --rm --no-deps -e FLASK_DEBUG=false "$svc" python -c '
+from superset.app import create_app
+with create_app().app_context():
+    from superset.extensions import db
+    from superset.models.core import Database
+    db.session.query(Database).all()
+print("decrypt check OK")' &&
 dc up -d
 ```
 
-On the image-tag stack, a failed hop prints a traceback and no summary, and
-nothing is written. Run the single-hop command above. It succeeds without
-changes when the metadata is already under the key in `docker/.env-local`. If
-it fails too, the values were encrypted with a key you no longer have.
+The decrypt check must print `decrypt check OK` before `dc up -d`. If it
+raises `Invalid decryption key`, the rows were not moved and the final `up`
+does not run. On a published image that check fails for the same reason the
+hops change nothing. Use a stack built from this checkout, or keep the old key.
 
 ## 3. Log in to Superset
 
