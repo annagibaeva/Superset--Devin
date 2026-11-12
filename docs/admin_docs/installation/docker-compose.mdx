@@ -312,8 +312,10 @@ with `-p <name>` each have their own `<name>_db_home_light` volume. Run the
 block once per instance, and put that `-p` name and the instance's `NODE_PORT`
 in the light `dc` function. Omit `-p` and `NODE_PORT` for a single light
 instance that was not started with a project name.
-Before the light definitions in a shell where you exported the `make up`
-project name, run `unset COMPOSE_PROJECT_NAME`.
+Before the light definitions in a shell where you ran the `make up` `eval`,
+run `unset COMPOSE_PROJECT_NAME NGINX_PORT SUPERSET_PORT NODE_PORT
+WEBSOCKET_PORT CYPRESS_PORT DATABASE_PORT REDIS_PORT`. A leftover `NODE_PORT`
+makes a single light instance publish that port instead of 9001.
 
 A stack started with `make up` uses that script's project name and ports,
 which can differ from plain `docker compose`. In the same shell, before the
